@@ -3,6 +3,7 @@ const store = require('../../utils/store')
 const { yuan2fen, fen2yuan } = require('../../utils/format')
 const { BELONG_WHOLEHOUSE, WHOLEHOUSE_SUBS } = require('../../utils/wholehouse')
 const att = require('../../utils/attachment')
+const write = require('../../utils/write')
 
 const CATEGORIES = ['主材', '辅材', '家具', '家电', '软装']
 const STATUS = ['to_buy', 'bought', 'on_site']
@@ -184,11 +185,7 @@ Page({
       if (d.id) {
         // 老数据可能没有 version 字段：仅当确有版本号时才加乐观锁校验，否则按 id 直接更新，避免编辑失败
         const baseVersion = d.baseVersion || 1
-        let q = cloud.database
-          .from('materials').update({ ...payload, version: baseVersion + 1 })
-          .eq('id', d.id)
-        if (d.baseVersion) q = q.eq('version', d.baseVersion)
-        const { data, error } = await q.select()
+        const { data, error } = await write.update('materials', this.projectId, d.id, { ...payload, version: baseVersion + 1 }, d.baseVersion)
         if (error) throw error
         if (!data || data.length === 0) {
           wx.showModal({ title: '记录已被他人修改', content: '请返回查看最新版本后再编辑。', showCancel: false })
@@ -203,8 +200,7 @@ Page({
           })
         } catch (e2) {}
       } else {
-        const { error } = await cloud.database
-          .from('materials').insert({ ...payload, version: 1, created_at: new Date().toISOString(), project_id: this.projectId })
+        const { error } = await write.insert('materials', this.projectId, { ...payload, version: 1, created_at: new Date().toISOString(), project_id: this.projectId })
         if (error) throw error
       }
       wx.showToast({ title: '已保存' })

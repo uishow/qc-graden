@@ -1,0 +1,9 @@
+{
+  "name": "dataWrite",
+  "version": "1.0.0",
+  "description": "成员校验写：diaries/expenses/materials 增删改统一入口",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

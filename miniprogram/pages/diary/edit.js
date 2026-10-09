@@ -1,6 +1,7 @@
 const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
 const { today } = require('../../utils/format')
+const write = require('../../utils/write')
 
 // 订阅消息模板：家人新日记提醒（后台公共模板，字段 thing1作者/thing2内容/time3时间/thing5备注）
 const SUBSCRIBE_TMPL_ID = 'd7KlYUn-ZiAtiSr3kuRkiD2qYbYygi0T_6kLxYTMMTk'
@@ -140,12 +141,7 @@ Page({
 
       if (id) {
         // 乐观锁：版本不符说明他人已改，提示后拉取最新
-        const { data, error } = await cloud.database
-          .from('diaries')
-          .update({ ...payload, version: baseVersion + 1 })
-          .eq('id', id)
-          .eq('version', baseVersion)
-          .select()
+        const { data, error } = await write.update('diaries', this.projectId, id, { ...payload, version: baseVersion + 1 }, baseVersion)
         if (error) throw error
         if (!data || data.length === 0) {
           wx.showModal({
@@ -161,10 +157,7 @@ Page({
           created_at: new Date().toISOString(),
         })
       } else {
-        const { data, error } = await cloud.database
-          .from('diaries')
-          .insert({ ...payload, deleted: false, project_id: this.projectId })
-          .select()
+        const { data, error } = await write.insert('diaries', this.projectId, { ...payload, deleted: false, project_id: this.projectId, version: 1 })
         if (error) throw error
         await cloud.database.from('revisions').insert({
           project_id: this.projectId, collection: 'diaries', doc_id: data[0].id,

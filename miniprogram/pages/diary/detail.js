@@ -1,5 +1,6 @@
 const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
+const write = require('../../utils/write')
 
 Page({
   data: {
@@ -64,11 +65,10 @@ Page({
       confirmText: '删除',
       success: async (res) => {
         if (!res.confirm) return
-        const { error } = await cloud.database
-          .from('diaries')
-          .update({ deleted: true, updated_at: new Date().toISOString() })
-          .eq('id', this.id)
-          .select()
+        const { error } = await write.update('diaries', store.getCurrentProjectId(), this.id, {
+          deleted: true,
+          updated_at: new Date().toISOString(),
+        })
         if (error) {
           wx.showToast({ title: '删除失败', icon: 'none' })
           return

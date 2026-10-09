@@ -3,6 +3,7 @@ const store = require('../../utils/store')
 const { yuan2fen, fen2yuan, today } = require('../../utils/format')
 const { BELONG_WHOLEHOUSE } = require('../../utils/wholehouse')
 const att = require('../../utils/attachment')
+const write = require('../../utils/write')
 
 // B 防重模型：花费类目不再含「材料」，材料支出统一在「材料清单」登记、自动计入预算，
 // 结构上杜绝与材料清单重复。可手填类目为 人工 / 设计 / 其他 / 订金·定金。
@@ -199,11 +200,7 @@ Page({
       if (id) {
         // 老数据可能没有 version 字段：仅当确有版本号时才加乐观锁校验，否则按 id 直接更新，避免编辑失败
         const ver = baseVersion || 1
-        let q = cloud.database
-          .from('expenses').update({ ...payload, version: ver + 1 })
-          .eq('id', id)
-        if (baseVersion) q = q.eq('version', baseVersion)
-        const { data, error } = await q.select()
+        const { data, error } = await write.update('expenses', this.projectId, id, { ...payload, version: ver + 1 }, baseVersion)
         if (error) throw error
         if (!data || data.length === 0) {
           wx.showModal({ title: '记录已被他人修改', content: '请返回查看最新版本后再编辑。', showCancel: false })
@@ -218,8 +215,7 @@ Page({
           })
         } catch (e2) {}
       } else {
-        const { error } = await cloud.database
-          .from('expenses').insert({ ...payload, version: 1, created_at: new Date().toISOString(), deleted: false, project_id: this.projectId })
+        const { error } = await write.insert('expenses', this.projectId, { ...payload, version: 1, created_at: new Date().toISOString(), deleted: false, project_id: this.projectId })
         if (error) throw error
       }
       wx.showToast({ title: '已保存' })

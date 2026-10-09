@@ -5,6 +5,7 @@ const { fen2yuan } = require('../../utils/format')
 const { BELONG_WHOLEHOUSE, isWholeHouseLike, isWholeHouseStage } = require('../../utils/wholehouse')
 const { exportExpensesTabCsv, exportMaterialsTabCsv, exportWholeHouseTabCsv } = require('../../utils/exportCsv')
 const cache = require('../../utils/cache')
+const write = require('../../utils/write')
 
 const app = getApp()
 
@@ -300,9 +301,10 @@ Page({
     )
     if (!confirm) return
     // 软删除：与日记一致，置 deleted:true，列表查询已过滤
-    const { error } = await cloud.database
-      .from('expenses').update({ deleted: true, updated_at: new Date().toISOString() })
-      .eq('id', id).select()
+    const { error } = await write.update('expenses', store.getCurrentProjectId(), id, {
+      deleted: true,
+      updated_at: new Date().toISOString(),
+    })
     if (error) {
       wx.showToast({ title: '删除失败', icon: 'none' })
       return
@@ -332,7 +334,7 @@ Page({
       })
     )
     if (!confirm) return
-    const { error } = await cloud.database.from('materials').remove().eq('id', id).select()
+    const { error } = await write.remove('materials', store.getCurrentProjectId(), id)
     if (error) {
       wx.showToast({ title: '删除失败', icon: 'none' })
       return
@@ -345,11 +347,10 @@ Page({
     const order = ['to_buy', 'bought', 'on_site']
     const next = order[Math.min(order.indexOf(cur) + 1, order.length - 1)]
     if (next === cur) return
-    const { error } = await cloud.database
-      .from('materials')
-      .update({ status: next, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
+    const { error } = await write.update('materials', store.getCurrentProjectId(), id, {
+      status: next,
+      updated_at: new Date().toISOString(),
+    })
     if (error) {
       wx.showToast({ title: '更新失败', icon: 'none' })
       return
