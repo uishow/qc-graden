@@ -23,3 +23,24 @@
 .btn-add:active {
   opacity: 0.85;
 }
+
+/* 云端定时周报卡片：左侧强调色竖条 + 「存为日记」小按钮 + 底部统计脚注 */
+.digest-card {
+  border-left: 8rpx solid var(--c-accent);
+}
+.digest-save {
+  font-size: 24rpx;
+  color: var(--c-accent);
+  background: var(--c-accent-bg);
+  border-radius: 999rpx;
+  padding: 6rpx 20rpx;
+  font-weight: 600;
+}
+.digest-save:active {
+  opacity: 0.85;
+}
+.digest-foot {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+}

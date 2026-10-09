@@ -1,0 +1,9 @@
+{
+  "name": "weeklyDigestAuto",
+  "version": "1.0.0",
+  "description": "周报定时自动生成（方案A）：每周日20:00遍历项目生成周报存 weekly_digests",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

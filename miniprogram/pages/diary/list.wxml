@@ -5,6 +5,19 @@
     <view class="btn-add" bindtap="goAdd">＋ 记一篇</view>
   </view>
 
+  <!-- 云端定时生成的本周进展卡片（方案A）：可存为日记留档，可收起 -->
+  <view wx:if="{{digestText}}" class="card digest-card">
+    <view class="between">
+      <view style="font-weight:600">📊 本周装修进展{{digestAuto ? '（自动生成）' : ''}}</view>
+      <view style="display:flex;gap:24rpx;align-items:center">
+        <view class="digest-save" bindtap="saveDigestAsDiary">存为日记</view>
+        <view class="muted" bindtap="closeDigest">收起</view>
+      </view>
+    </view>
+    <view style="margin-top:12rpx;line-height:1.7;white-space:pre-wrap">{{digestText}}</view>
+    <view class="digest-foot muted">{{digestTime ? digestTime + ' 生成 · ' : ''}}{{digestStats}}</view>
+  </view>
+
   <view wx:if="{{empty}}" class="empty">
     <view>还没有日记</view>
     <view class="muted" style="margin-top:12rpx">点右上角「记一篇」，留下装修的第一天</view>

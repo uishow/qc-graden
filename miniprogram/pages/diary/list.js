@@ -8,6 +8,10 @@ Page({
     theme: 'theme-a',
     groups: [],
     empty: false,
+    digestText: '',
+    digestStats: '',
+    digestTime: '',
+    digestAuto: false, // true=云定时生成的周报（标题带「自动生成」并显示存为日记按钮）
   },
 
   async onShow() {
@@ -16,6 +20,7 @@ Page({
     const session = await app.ready()
     if (!session) return
     await this.load()
+    this.loadWeeklyDigest() // 云端定时周报（方案A）：本周已自动生成则顶部显示卡片
     this.startWatch() // M3·L1 试点：日记时间线实时监听（真机验证 30s 双机可见）
   },
 
@@ -128,6 +133,52 @@ Page({
     const end = new Date(start)
     end.setDate(start.getDate() + 6) // 本周日
     return fmt(start) + '-' + fmt(end)
+  },
+
+  // 云端定时周报（weeklyDigestAuto 每周日 20:00 生成，存 weekly_digests）：本周有则顶部显示
+  weekKey() {
+    const d = new Date()
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const p = (n) => (n < 10 ? '0' + n : '' + n)
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+  },
+
+  async loadWeeklyDigest() {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return
+    try {
+      const { data } = await cloud.database
+        .from('weekly_digests').select('*')
+        .eq('project_id', projectId)
+        .eq('week', this.weekKey())
+        .limit(1)
+      const d = data && data[0]
+      if (d) {
+        this.setData({
+          digestText: d.summary || '',
+          digestStats: d.stats || '',
+          digestTime: String(d.created_at || '').slice(5, 16).replace('T', ' '),
+          digestAuto: true,
+        })
+      }
+    } catch (e) { /* 集合未建/无数据则不显示卡片 */ }
+  },
+
+  // 云端周报一键存为日记：复用「记一篇 → AI 草稿」的 storage 通道
+  saveDigestAsDiary() {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId || !this.data.digestText) return
+    try {
+      wx.setStorageSync('weeklyDraft:' + projectId, {
+        title: '本周进展 ' + this.weekRangeText(),
+        content: [this.data.digestText, this.data.digestStats].filter(Boolean).join('\n\n'),
+      })
+    } catch (e) { /* 存不上则编辑页空白，仍可手写 */ }
+    wx.navigateTo({ url: '/pages/diary/edit' })
+  },
+
+  closeDigest() {
+    this.setData({ digestText: '', digestStats: '', digestTime: '', digestAuto: false })
   },
 
   async genWeeklyDraft(projectId) {

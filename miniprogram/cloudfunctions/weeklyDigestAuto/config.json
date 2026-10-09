@@ -1,0 +1,12 @@
+{
+  "timeout": 60,
+  "memorySize": 512,
+  "installDependency": true,
+  "triggers": [
+    {
+      "name": "weeklySunday20",
+      "type": "timer",
+      "config": "0 0 20 * * SUN *"
+    }
+  ]
+}
