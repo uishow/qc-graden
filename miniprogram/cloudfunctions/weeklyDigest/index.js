@@ -39,7 +39,8 @@ function httpJson({ method = 'GET', url, headers = {}, body }) {
       }
     )
     req.on('error', reject)
-    req.setTimeout(25000, () => req.destroy(new Error('大模型请求超时')))
+    // 20s 截止：云端函数超时建议配 60s（控制台确认），客户端也要等得起；超时走统计兜底
+    req.setTimeout(20000, () => req.destroy(new Error('大模型请求超时')))
     if (data) req.write(data)
     req.end()
   })

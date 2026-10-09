@@ -10,6 +10,7 @@ Page({
     empty: false,
     digestText: '',
     digestStats: '',
+    digestTime: '',
     digestLoading: false,
   },
 
@@ -19,6 +20,7 @@ Page({
     const session = await app.ready()
     if (!session) return
     await this.load()
+    this.restoreDigest() // 恢复本周已生成的进展（重编译/重进不丢）
     this.startWatch() // M3·L1 试点：日记时间线实时监听（真机验证 30s 双机可见）
   },
 
@@ -107,7 +109,27 @@ Page({
     }
   },
 
-  // —— V1.3 周报摘要（手动触发版）——
+  // —— V1.3 周报摘要（手动触发 + 本周本地缓存）——
+  // 缓存 key 按项目 + 本周周一日期：跨周自动失效，重新编译/重进页面都能恢复显示。
+  weekKey() {
+    const d = new Date()
+    const off = (d.getDay() + 6) % 7 // 周一为本周起点
+    d.setDate(d.getDate() - off)
+    const p = (n) => (n < 10 ? '0' + n : '' + n)
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+  },
+
+  restoreDigest() {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return
+    try {
+      const c = wx.getStorageSync('digest:' + projectId)
+      if (c && c.week === this.weekKey() && c.text) {
+        this.setData({ digestText: c.text, digestStats: c.stats || '', digestTime: c.time || '' })
+      }
+    } catch (e) { /* 缓存不可用则忽略 */ }
+  },
+
   async genWeekly() {
     if (this.data.digestLoading) return
     const projectId = store.getCurrentProjectId()
@@ -122,8 +144,9 @@ Page({
       const res = await wx.cloud.callFunction({ name: 'weeklyDigest', data: { projectId } })
       result = res && res.result
     } catch (e) {
-      // 把真实错误带出来（-501000=函数未部署 / 超时 / 权限…），不再笼统报「网络异常」
-      const detail = String((e && (e.errCode || e.errMsg || e.message)) || '').slice(0, 60)
+      // errMsg 优先（含 timeout / not found 等真实原因），errCode 只是数字（如 -1 看不出原因）
+      const ed = e || {}
+      const detail = String(ed.errMsg || ed.errCode || ed.message || '').slice(0, 80)
       result = { ok: false, message: '调用失败：' + (detail || '网络异常') }
     } finally {
       this.setData({ digestLoading: false })
@@ -132,17 +155,26 @@ Page({
       wx.showToast({ title: (result && result.message) || '生成失败，请重试', icon: 'none' })
       return
     }
+    const d = new Date()
+    const p = (n) => (n < 10 ? '0' + n : '' + n)
+    const time = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + p(d.getHours()) + ':' + p(d.getMinutes())
     this.setData({
       digestText: result.summary,
       digestStats: result.stats || '',
+      digestTime: time,
     })
+    try {
+      wx.setStorageSync('digest:' + projectId, { week: this.weekKey(), text: result.summary, stats: result.stats || '', time })
+    } catch (e) { /* 存不上就算了，只是缓存 */ }
     if (result.ai === false && result.aiError) {
       wx.showToast({ title: 'AI 未生成，已用统计兜底', icon: 'none' })
     }
   },
 
   closeDigest() {
-    this.setData({ digestText: '' })
+    this.setData({ digestText: '', digestTime: '' })
+    // 「收起」= 明确不想看，缓存一并清掉，避免重编译后又冒出来
+    try { wx.removeStorageSync('digest:' + store.getCurrentProjectId()) } catch (e) {}
   },
 
   goDetail(e) {

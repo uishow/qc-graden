@@ -10,18 +10,49 @@ Page({
     input: '',
     lastId: '',
     loading: false,
+    kbHeight: 0, // 键盘高度：抬升输入条避免遮挡
+  },
+
+  onLoad() {
+    // 键盘高度回调需挂实例方法才能注销成对
+    this._onKb = (res) => {
+      this.setData({ kbHeight: res.height || 0 })
+      if (res.height) this.scrollToBottom()
+    }
   },
 
   onShow() {
     store.applyTheme(this)
+    if (wx.onKeyboardHeightChange) wx.onKeyboardHeightChange(this._onKb)
+  },
+
+  onHide() {
+    if (wx.offKeyboardHeightChange) wx.offKeyboardHeightChange(this._onKb)
+  },
+
+  onUnload() {
+    if (wx.offKeyboardHeightChange) wx.offKeyboardHeightChange(this._onKb)
+  },
+
+  scrollToBottom() {
+    const n = this.data.messages.length
+    if (n) this.setData({ lastId: 'msg' + (n - 1) })
   },
 
   onInput(e) {
     this.setData({ input: e.detail.value })
   },
 
-  async send() {
-    const text = String(this.data.input || '').trim()
+  // 空状态建议问题：点一下直接发送
+  sendSuggest(e) {
+    const q = e.currentTarget.dataset.q
+    if (!q) return
+    this.setData({ input: q }, () => this.send(q))
+  },
+
+  async send(src) {
+    // bindconfirm 传事件对象、sendSuggest 传字符串，两者都要兼容
+    const text = String(typeof src === 'string' ? src : this.data.input || '').trim()
     if (!text || this.data.loading) return
     const messages = this.data.messages.concat([{ role: 'user', text, sources: [] }])
     this.setData({ messages, input: '', loading: true, lastId: 'msg' + (messages.length - 1) })

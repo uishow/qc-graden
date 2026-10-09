@@ -3,18 +3,18 @@
   <view class="section-head">
     <view class="section-title">装修日记</view>
     <view style="display:flex;gap:12rpx;align-items:center">
-      <view class="btn-outline sm" bindtap="genWeekly">{{digestLoading ? '生成中…' : '本周进展'}}</view>
+      <view class="digest-btn" bindtap="genWeekly">{{digestLoading ? '⏳ 生成中…' : '📊 本周进展'}}</view>
       <view class="btn-add" bindtap="goEdit">＋ 记一篇</view>
     </view>
   </view>
 
-  <view wx:if="{{digestText}}" class="card" style="border-left:8rpx solid var(--c-accent)">
+  <view wx:if="{{digestText}}" class="card digest-card">
     <view class="between">
       <view style="font-weight:600">本周装修进展</view>
       <view class="muted" bindtap="closeDigest">收起</view>
     </view>
     <view style="margin-top:12rpx;line-height:1.7;white-space:pre-wrap">{{digestText}}</view>
-    <view class="muted" style="margin-top:12rpx;font-size:24rpx">{{digestStats}}</view>
+    <view class="digest-foot muted">{{digestTime ? digestTime + ' 生成 · ' : ''}}{{digestStats}}</view>
   </view>
 
   <view wx:if="{{empty}}" class="empty">
