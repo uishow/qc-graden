@@ -37,6 +37,10 @@ Page({
     whTotalText: '¥0.00',
     whItems: [],
     whSuggestCount: 0,
+    // 一键归集疑似项：勾选弹窗
+    whSheet: false,
+    whPicks: [],
+    whPickedCount: 0,
   },
 
   onLoad() {},
@@ -65,6 +69,18 @@ Page({
     const session = await app.ready()
     if (!session) return
     await this.load()
+  },
+
+  onHide() {
+    this.setBarHidden(false) // 安全兜底：离开页面时恢复 tabBar
+  },
+
+  noop() {},
+
+  // 弹窗打开期间隐藏自定义 tabBar：其框架包装层层级高于页面 fixed 弹窗，会盖住底部按钮
+  setBarHidden(hidden) {
+    const bar = this.getTabBar && this.getTabBar()
+    if (bar) bar.setData({ hidden: !!hidden })
   },
 
   async load() {
@@ -297,7 +313,8 @@ Page({
     if (kind === 'material') wx.navigateTo({ url: `/pages/material/edit?id=${id}` })
     else wx.navigateTo({ url: `/pages/budget/edit?id=${id}` })
   },
-  // 关键词兑底：把名称/备注含全屋定制关键词的材料/花费批量标记为全屋定制
+  // 关键词兜底：把名称/备注含全屋定制关键词的材料/花费标记为全屋定制。
+  // 弹出底部弹窗列出疑似项，勾选后确认，只归集勾选的条目（默认全选）。
   async autoTagWholeHouse() {
     const pid = store.getCurrentProjectId()
     if (!pid) return
@@ -307,33 +324,66 @@ Page({
     ])
     const matHit = (mats || []).filter((m) => m.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike((m.name || '') + ' ' + (m.remark || '')))
     const expHit = (exps || []).filter((x) => x.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike(x.remark || ''))
-    const total = matHit.length + expHit.length
-    if (!total) {
+    const picks = [
+      ...matHit.map((m) => ({
+        k: 'm' + m.id, kind: 'material', id: m.id, kindName: '材料',
+        title: m.name || '未命名材料', sub: m.remark || '', checked: true,
+      })),
+      ...expHit.map((x) => ({
+        k: 'e' + x.id, kind: 'expense', id: x.id, kindName: '花费',
+        title: x.remark || '未填备注', sub: '', checked: true,
+      })),
+    ]
+    if (!picks.length) {
       wx.showToast({ title: '没有可归集的疑似项', icon: 'none' })
       return
     }
-    const { confirm } = await new Promise((resolve) =>
-      wx.showModal({
-        title: '一键归集',
-        content: `将把名称/备注含全屋定制关键词的 ${matHit.length} 项材料、${expHit.length} 笔花费标记为「全屋定制」，确定？`,
-        confirmText: '归集',
-        success: (r) => resolve(r),
-      })
-    )
-    if (!confirm) return
-    wx.showLoading({ title: '归集中…' })
+    this.setBarHidden(true)
+    this.setData({ whSheet: true, whPicks: picks, whPickedCount: picks.length })
+  },
+
+  // checkbox-group 勾选变化：同步每项 checked 态与已选数（用于按钮文案）
+  onWhPickChange(e) {
+    const keys = e.detail.value || []
+    const whPicks = this.data.whPicks.map((p) => ({ ...p, checked: keys.indexOf(p.k) !== -1 }))
+    this.setData({ whPicks, whPickedCount: whPicks.filter((p) => p.checked).length })
+  },
+
+  cancelWhPick() {
+    this.setBarHidden(false)
+    this.setData({ whSheet: false, whPicks: [], whPickedCount: 0 })
+  },
+
+  async confirmWhPick() {
+    const picked = this.data.whPicks.filter((p) => p.checked)
+    if (!picked.length) {
+      wx.showToast({ title: '请先勾选要归集的项', icon: 'none' })
+      return
+    }
+    wx.showLoading({ title: '归集中…', mask: true })
+    // showLoading/showToast 共用同一原生单例：hideLoading 必须在 showToast 之前，否则提示被瞬间关掉
+    let ok = true
     try {
       const now = new Date().toISOString()
-      await Promise.all([
-        ...matHit.map((m) => cloud.database.from('materials').update({ belong: BELONG_WHOLEHOUSE, updated_at: now }).eq('id', m.id)),
-        ...expHit.map((x) => cloud.database.from('expenses').update({ belong: BELONG_WHOLEHOUSE, updated_at: now }).eq('id', x.id)),
-      ])
-      wx.hideLoading()
-      wx.showToast({ title: `已归集 ${total} 项` })
-      await this.load()
+      await Promise.all(
+        picked.map((p) =>
+          cloud.database
+            .from(p.kind === 'material' ? 'materials' : 'expenses')
+            .update({ belong: BELONG_WHOLEHOUSE, updated_at: now })
+            .eq('id', p.id)
+        )
+      )
     } catch (err) {
+      ok = false
+    } finally {
       wx.hideLoading()
-      wx.showToast({ title: '归集失败，请重试', icon: 'none' })
     }
+    if (!ok) {
+      wx.showToast({ title: '归集失败，请重试', icon: 'none' })
+      return
+    }
+    this.cancelWhPick()
+    wx.showToast({ title: `已归集 ${picked.length} 项` })
+    await this.load()
   },
 })

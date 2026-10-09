@@ -102,3 +102,24 @@
   text-align: center;
   padding: 14rpx 24rpx;
 }
+
+/* 一键归集疑似项：勾选列表（弹窗复用全局 .mask/.sheet 三段式） */
+.wh-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid var(--c-secondary-bg);
+}
+.wh-pick-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+/* checkbox 选中态跟随主题色 */
+.wh-pick-row .wx-checkbox-input.wx-checkbox-input-checked {
+  background-color: var(--c-primary);
+  border-color: var(--c-primary);
+}

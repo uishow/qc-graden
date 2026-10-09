@@ -177,4 +177,29 @@
       </view>
     </block>
   </block>
+
+  <!-- 一键归集疑似项：勾选弹窗（flex column + 可滚主体，防底部按钮被裁切；打开期间隐藏 tabBar） -->
+  <view wx:if="{{whSheet}}" class="mask" bindtap="cancelWhPick">
+    <view class="sheet" catchtap="noop">
+      <view class="sheet-head">
+        <view style="font-weight:600;font-size:32rpx">一键归集疑似项</view>
+        <view class="muted" style="margin-top:8rpx">勾选要标记为「全屋定制」的条目（默认全选）</view>
+      </view>
+      <view class="sheet-body" style="margin-top:12rpx">
+        <checkbox-group bindchange="onWhPickChange">
+          <label wx:for="{{whPicks}}" wx:key="k" class="wh-pick-row">
+            <checkbox value="{{item.k}}" checked="{{item.checked}}" />
+            <view class="wh-pick-main">
+              <text class="slim-title">{{item.title}}</text>
+              <text class="slim-meta">{{item.kindName}}<block wx:if="{{item.sub}}"> · {{item.sub}}</block></text>
+            </view>
+          </label>
+        </checkbox-group>
+      </view>
+      <view class="sheet-foot row" style="gap:16rpx;margin-top:20rpx">
+        <view class="btn-outline flex1" bindtap="cancelWhPick">取消</view>
+        <view class="btn-primary flex1" bindtap="confirmWhPick">归集已选（{{whPickedCount}}）</view>
+      </view>
+    </view>
+  </view>
 </view>
