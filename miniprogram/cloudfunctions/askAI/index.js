@@ -74,12 +74,12 @@ function relevanceScore(question, text) {
 
 function buildContext(articles, question) {
   const scored = articles
-    .map((a) => ({ a, score: relevanceScore(question, (a.title || '') + ' ' + (a.summary || '') + ' ' + String(a.content || '').slice(0, 800)) }))
+    .map((a) => ({ a, score: relevanceScore(question, (a.title || '') + ' ' + (a.summary || '') + ' ' + String(a.content || '').slice(0, 1200)) }))
     .sort((x, y) => y.score - x.score)
   // 相关度为 0 的不进上下文也不进来源（避免「没有相关内容」却挂出一排无关文章）
   const top = scored.filter((x) => x.score > 0).slice(0, 6).map((x) => x.a)
   const context = top
-    .map((a, i) => `[${i + 1}] ${a.title}\n${String(a.summary || a.content || '').slice(0, 300)}`)
+    .map((a, i) => `[${i + 1}] ${a.title}\n${String(a.content || a.summary || '').slice(0, 600)}`)
     .join('\n\n')
   // 服务端 SDK 主键是 _id（前端适配层才叫 id），详情页跳转必须用 _id
   const sources = top.map((a) => ({ id: a._id || a.id, title: a.title }))
@@ -110,8 +110,11 @@ async function callLLM(context, question) {
     '以下是家庭装修知识库中检索到的内容片段：',
     context,
     '',
-    `请基于以上内容回答用户问题：${question}`,
-    '要求：简洁中文、分点清晰、贴合家庭装修场景；内容不足以回答时如实说明，并建议咨询专业人士。不要编造知识库里没有的结论。',
+    `请回答用户问题：${question}`,
+    '要求：',
+    '- 中文，先给一句结论，再分点展开，总篇幅 250-400 字；',
+    '- 知识库内容够用就紧贴它讲；不够时可以补充可靠的装修常识，但要用「通用建议：」标注这是知识库外的补充；',
+    '- 涉及安全的事项（防水、水电、燃气、承重墙等）提醒找专业人士现场确认。',
   ].join('\n')
   const j = await httpJson({
     method: 'POST',
@@ -120,11 +123,11 @@ async function callLLM(context, question) {
     body: {
       model,
       messages: [
-        { role: 'system', content: '你是家庭装修知识库助手，回答基于提供的知识库内容，风格务实、对装修小白友好。' },
+        { role: 'system', content: '你是家庭装修助手，优先参考用户提供的知识库内容，也可结合可靠的装修常识；风格务实、对装修小白友好，回答具体、可执行。' },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.4,
-      max_tokens: 500, // 限长即提速：回答更短更快，避开客户端 15s 超时
+      temperature: 0.5,
+      max_tokens: 600, // 提升信息量的同时保住客户端 15s 内返回（约 400 字级回答）
       stream: false,
     },
   })
