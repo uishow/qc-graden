@@ -2,7 +2,7 @@
   <view class="card">
     <view class="field-label">ima 分享链接</view>
     <textarea class="textarea" placeholder="粘贴 ima 知识库/笔记的分享链接（微信转发来的卡片也能自动识别）"
-      value="{{link}}" bindinput="onLinkInput" auto-height />
+      value="{{link}}" bindinput="onLinkInput" auto-height maxlength="{{-1}}" />
     <view class="hint">支持微信分享卡片格式（@share-html#… 包裹串会自动提取里面的真实链接）。MVP 阶段先保存链接卡片，正文抓取将在后续版本（接入 ima API）补齐。</view>
   </view>
 
@@ -11,7 +11,7 @@
     <input class="input" placeholder="例如：卫生间防水验收要点" value="{{title}}" bindinput="onTitleInput" />
 
     <view class="field-label">导入备注（可选）</view>
-    <textarea class="textarea" placeholder="给家人看的一句话说明…" value="{{note}}" bindinput="onNoteInput" auto-height />
+    <textarea class="textarea" placeholder="给家人看的一句话说明…" value="{{note}}" bindinput="onNoteInput" auto-height maxlength="{{-1}}" />
 
     <view class="field-label">归类到</view>
     <scroll-view scroll-x style="white-space:nowrap">

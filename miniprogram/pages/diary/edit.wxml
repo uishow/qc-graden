@@ -1,9 +1,10 @@
 <view class="page-root {{theme}}">
   <view class="field-label">标题 *</view>
-  <input class="input" placeholder="今天工地发生了什么？" value="{{title}}" data-field="title" bindinput="onInput" />
+  <input class="input" maxlength="{{-1}}" placeholder="今天工地发生了什么？" value="{{title}}" data-field="title" bindinput="onInput" />
 
   <view class="field-label">正文</view>
-  <textarea class="textarea" placeholder="记录进展、问题、心得…" value="{{content}}" data-field="content" bindinput="onInput" />
+  <!-- maxlength 必须显式 -1：textarea 默认限 140 字，AI 草稿会被截断显示；auto-height 随内容长高 -->
+  <textarea class="textarea" auto-height maxlength="{{-1}}" placeholder="记录进展、问题、心得…" value="{{content}}" data-field="content" bindinput="onInput" />
 
   <view class="field-label">日期</view>
   <picker mode="date" value="{{diaryDate}}" bindchange="onDateChange">
