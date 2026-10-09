@@ -39,8 +39,9 @@ function httpJson({ method = 'GET', url, headers = {}, body }) {
       }
     )
     req.on('error', reject)
-    // 20s 截止：云端函数超时建议配 60s（控制台确认），客户端也要等得起；超时走统计兜底
-    req.setTimeout(20000, () => req.destroy(new Error('大模型请求超时')))
+    // 13s 截止：小程序端 callFunction 默认约 15s 就超时报 -1，函数必须先于它返回；
+    // 超时走统计兜底，不再让整个调用死掉（云端函数超时仍建议在控制台配 60s）
+    req.setTimeout(13000, () => req.destroy(new Error('大模型请求超时')))
     if (data) req.write(data)
     req.end()
   })
@@ -129,6 +130,7 @@ async function callLLM(s) {
         { role: 'user', content: prompt },
       ],
       temperature: 0.4,
+      max_tokens: 300, // 120 字总结的充足上限，限长即提速，避开客户端 15s 超时
       stream: false,
     },
   })

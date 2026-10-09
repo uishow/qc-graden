@@ -42,7 +42,9 @@ function httpJson({ method = 'GET', url, headers = {}, body }) {
       }
     )
     req.on('error', reject)
-    req.setTimeout(25000, () => req.destroy(new Error('大模型请求超时')))
+    // 13s 截止：小程序端 callFunction 默认约 15s 就超时报 -1，函数必须先于它返回；
+    // 超时走「相关文章列表」降级，不再让整个调用死掉
+    req.setTimeout(13000, () => req.destroy(new Error('大模型请求超时')))
     if (data) req.write(data)
     req.end()
   })
@@ -74,11 +76,13 @@ function buildContext(articles, question) {
   const scored = articles
     .map((a) => ({ a, score: relevanceScore(question, (a.title || '') + ' ' + (a.summary || '') + ' ' + String(a.content || '').slice(0, 800)) }))
     .sort((x, y) => y.score - x.score)
-  const top = scored.slice(0, 6).map((x) => x.a)
+  // 相关度为 0 的不进上下文也不进来源（避免「没有相关内容」却挂出一排无关文章）
+  const top = scored.filter((x) => x.score > 0).slice(0, 6).map((x) => x.a)
   const context = top
     .map((a, i) => `[${i + 1}] ${a.title}\n${String(a.summary || a.content || '').slice(0, 300)}`)
     .join('\n\n')
-  const sources = top.map((a) => ({ id: a.id, title: a.title }))
+  // 服务端 SDK 主键是 _id（前端适配层才叫 id），详情页跳转必须用 _id
+  const sources = top.map((a) => ({ id: a._id || a.id, title: a.title }))
   return { context, sources }
 }
 
@@ -120,6 +124,7 @@ async function callLLM(context, question) {
         { role: 'user', content: prompt },
       ],
       temperature: 0.4,
+      max_tokens: 500, // 限长即提速：回答更短更快，避开客户端 15s 超时
       stream: false,
     },
   })
