@@ -141,6 +141,7 @@ Page({
         await cloud.database.from('revisions').insert({
           project_id: this.projectId, collection: 'diaries', doc_id: id,
           action: 'update', prev_version: baseVersion, new_version: baseVersion + 1,
+          created_at: new Date().toISOString(),
         })
       } else {
         const { data, error } = await cloud.database
@@ -151,6 +152,7 @@ Page({
         await cloud.database.from('revisions').insert({
           project_id: this.projectId, collection: 'diaries', doc_id: data[0].id,
           action: 'create', new_version: 1,
+          created_at: new Date().toISOString(),
         })
       }
       wx.showToast({ title: '已保存' })

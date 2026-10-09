@@ -80,7 +80,7 @@ Page({
       .order('created_at', { ascending: false }).limit(20)
     this.setData({
       revisions: (data || []).map((r) => ({
-        timeText: String(r.created_at || '').slice(0, 16).replace('T', ' '),
+        timeText: String(r.created_at || '').slice(0, 16).replace('T', ' ') || '—',
         actionText: r.action === 'update' ? '修改' : r.action === 'create' ? '创建' : (r.action || '操作'),
         newVersion: r.new_version || '',
       })),
@@ -194,11 +194,12 @@ Page({
           wx.showModal({ title: '记录已被他人修改', content: '请返回查看最新版本后再编辑。', showCancel: false })
           return
         }
-        // 追加修改历史（写入失败不影响已保存的数据）
+        // 追加修改历史（写入失败不影响已保存的数据）；适配层 insert 不自动补时间戳，必须显式带 created_at
         try {
           await cloud.database.from('revisions').insert({
             project_id: this.projectId, collection: 'materials', doc_id: d.id,
             action: 'update', prev_version: baseVersion, new_version: baseVersion + 1,
+            created_at: new Date().toISOString(),
           })
         } catch (e2) {}
       } else {
