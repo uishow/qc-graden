@@ -81,7 +81,7 @@ Page({
     }
     const [{ data: stages }, { data: diaries }, { data: expenses }, { data: materials }] = await Promise.all([
       cloud.database.from('stages').select('*').eq('project_id', projectId).order('sort_order'),
-      cloud.database.from('diaries').select('id,title,diary_date,image_paths,created_at,updated_at')
+      cloud.database.from('diaries').select('id,title,diary_date,image_paths,updated_at')
         .eq('project_id', projectId).neq('deleted', true)
         .limit(50),
       cloud.database.from('expenses').select('amount,type').eq('project_id', projectId).neq('deleted', true),
@@ -144,10 +144,9 @@ Page({
     const matExecPercent = planTotal > 0 ? Math.round((purchasedPlanTotal / planTotal) * 100) : 0 // 计划执行率（按计划额，推进才变）
     const matPlanDeviation = purchasedMatTotal - purchasedPlanTotal // 实际-计划（已执行项），正=超支
 
-    // 首页「最新日记」：按创建时间倒序，最新的在前；老数据无 created_at 时回退 updated_at/diary_date
+    // 首页「最新日记」：按更新时间倒序，最近动过的在前（updated_at 所有日记都有，无需回退）
     const diaryTs = (d) => {
-      const v = d.created_at || d.updated_at || d.diary_date || ''
-      const t = v ? Date.parse(v) : 0
+      const t = d.updated_at ? Date.parse(d.updated_at) : 0
       return isNaN(t) ? 0 : t
     }
     const latestDiaries = (diaries || []).slice().sort((a, b) => diaryTs(b) - diaryTs(a)).slice(0, 3)
