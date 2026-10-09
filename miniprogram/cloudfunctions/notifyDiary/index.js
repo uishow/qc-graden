@@ -35,6 +35,7 @@ exports.main = async (event) => {
     const targets = (memRes.data || []).filter((m) => m.user_id && m.user_id !== d.last_editor_id)
     let sent = 0
     let skipped = 0
+    const errors = []
     for (const m of targets) {
       try {
         await cloud.openapi.subscribeMessage.send({
@@ -50,10 +51,13 @@ exports.main = async (event) => {
         })
         sent++
       } catch (e) {
-        skipped++ // 常见：43101 用户未订阅/已拒绝，静默跳过
+        skipped++ // 常见：43101 未订阅/额度用完；47003 字段超限
+        const detail = String((e && (e.errCode || e.errMsg)) || e).slice(0, 100)
+        console.warn('[notifyDiary] 发送失败 user=' + m.user_id, detail)
+        errors.push(detail)
       }
     }
-    return { ok: true, sent, skipped, targets: targets.length }
+    return { ok: true, sent, skipped, targets: targets.length, errors }
   } catch (e) {
     return { ok: false, message: (e && e.message) || '发送失败' }
   }
