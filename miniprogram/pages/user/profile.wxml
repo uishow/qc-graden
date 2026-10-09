@@ -186,7 +186,7 @@
       <view class="muted" style="margin:16rpx 0 8rpx;font-size:24rpx">模型名（如 deepseek-chat）</view>
       <input class="input" type="text" placeholder="deepseek-chat" value="{{aiForm.model}}" bindinput="onAIInput" data-field="model" adjust-position="{{false}}" />
       <view class="muted" style="margin:16rpx 0 8rpx;font-size:24rpx">API Key{{aiConfigured ? '（已配置·尾' + aiKeyTail + '，留空不修改）' : ''}}</view>
-      <input class="input" type="text" password placeholder="{{aiConfigured ? '留空不修改' : 'sk-…'}}" value="{{aiForm.api_key}}" bindinput="onAIInput" data-field="api_key" adjust-position="{{false}}" />
+      <input class="input" type="text" placeholder="{{aiConfigured ? '留空不修改' : 'sk-…'}}" value="{{aiForm.api_key}}" bindinput="onAIInput" data-field="api_key" adjust-position="{{false}}" />
       <view class="row" style="gap:16rpx;margin-top:28rpx">
         <view class="btn-outline flex1" bindtap="cancelAI">取消</view>
         <view class="btn-primary flex1" bindtap="saveAI">{{aiSaving ? '保存中…' : '保存'}}</view>
