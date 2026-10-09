@@ -33,7 +33,8 @@ Page({
       })
       result = res && res.result
     } catch (e) {
-      result = { ok: false, message: '网络异常，请重试' }
+      const detail = String((e && (e.errCode || e.errMsg || e.message)) || '').slice(0, 60)
+      result = { ok: false, message: '调用失败：' + (detail || '网络异常') }
     }
     const answer = result && result.ok
       ? result.answer

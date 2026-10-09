@@ -122,7 +122,9 @@ Page({
       const res = await wx.cloud.callFunction({ name: 'weeklyDigest', data: { projectId } })
       result = res && res.result
     } catch (e) {
-      result = { ok: false, message: '网络异常，请重试' }
+      // 把真实错误带出来（-501000=函数未部署 / 超时 / 权限…），不再笼统报「网络异常」
+      const detail = String((e && (e.errCode || e.errMsg || e.message)) || '').slice(0, 60)
+      result = { ok: false, message: '调用失败：' + (detail || '网络异常') }
     } finally {
       this.setData({ digestLoading: false })
     }
