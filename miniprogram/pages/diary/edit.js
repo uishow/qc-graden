@@ -136,6 +136,7 @@ Page({
         stage_id: stageIndex >= 0 ? stages[stageIndex].id : null,
         image_paths: imagePaths,
         last_editor_id: uid,
+        created_at: now,
         updated_at: now,
       }
 
