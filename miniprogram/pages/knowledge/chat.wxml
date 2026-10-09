@@ -1,0 +1,36 @@
+<view class="page-root {{theme}} chat-page">
+  <scroll-view class="chat-body" scroll-y scroll-into-view="{{lastId}}" scroll-with-animation>
+    <view wx:if="{{messages.length === 0}}" class="chat-empty muted">
+      问我任何装修问题：防水怎么做、预算怎么分配、验收注意什么…
+    </view>
+    <view wx:for="{{messages}}" wx:key="index" id="msg{{index}}" class="msg-row {{item.role === 'user' ? 'me' : ''}}">
+      <view class="bubble {{item.role === 'user' ? 'bubble-me' : 'bubble-ai'}}">{{item.text}}</view>
+      <view wx:if="{{item.sources.length}}" class="src-row">
+        <text class="muted">来源：</text>
+        <text
+          wx:for="{{item.sources}}"
+          wx:for-item="s"
+          wx:key="id"
+          class="src-link"
+          bindtap="goSource"
+          data-id="{{s.id}}">{{s.title}} </text>
+      </view>
+    </view>
+    <view wx:if="{{loading}}" class="msg-row">
+      <view class="bubble bubble-ai">思考中…</view>
+    </view>
+    <view style="height:20rpx"></view>
+  </scroll-view>
+
+  <view class="chat-input">
+    <input
+      class="chat-input-field"
+      value="{{input}}"
+      confirm-type="send"
+      placeholder="问点装修的事…"
+      bindinput="onInput"
+      bindconfirm="send"
+    />
+    <view class="send-btn {{loading ? 'send-disabled' : ''}}" bindtap="send">发送</view>
+  </view>
+</view>

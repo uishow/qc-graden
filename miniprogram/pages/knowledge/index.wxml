@@ -7,6 +7,11 @@
 
   <!-- 知识库（已发布） -->
   <block wx:if="{{activeTab === 0}}">
+    <view class="card btn-ai-entry" bindtap="goChat">
+      <view style="font-weight:600">🤖 AI 装修问答</view>
+      <view class="muted" style="margin-top:6rpx">基于知识库回答：防水、预算、验收…</view>
+    </view>
+
     <input class="input" placeholder="搜索：防水、预算、验收…" value="{{keyword}}" bindinput="onKeywordInput" />
 
     <scroll-view scroll-x style="white-space:nowrap;margin-bottom:20rpx">

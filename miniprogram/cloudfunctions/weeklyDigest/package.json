@@ -1,0 +1,9 @@
+{
+  "name": "weeklyDigest",
+  "version": "1.0.0",
+  "description": "周报摘要：汇总近 7 天日记/花费/材料，LLM 生成进展总结（手动触发）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

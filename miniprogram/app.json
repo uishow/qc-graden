@@ -12,6 +12,7 @@
     "pages/material/edit",
     "pages/knowledge/detail",
     "pages/knowledge/import",
+    "pages/knowledge/chat",
     "pages/stage/board",
     "pages/room/manage"
   ],

@@ -1,0 +1,9 @@
+{
+  "name": "askAI",
+  "version": "1.0.0",
+  "description": "知识库 AI 问答：检索文章做上下文，LLM 生成回答",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

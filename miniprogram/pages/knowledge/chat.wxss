@@ -1,0 +1,85 @@
+/* AI 问答页：消息流 + 底部输入条（页面级 flex 布局，与底部弹窗坑无关） */
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+}
+.chat-body {
+  flex: 1;
+  min-height: 0;
+  padding: 20rpx 24rpx;
+  box-sizing: border-box;
+}
+.chat-empty {
+  text-align: center;
+  margin-top: 30vh;
+  font-size: 26rpx;
+  padding: 0 40rpx;
+  line-height: 1.8;
+}
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 20rpx;
+}
+.msg-row.me {
+  align-items: flex-end;
+}
+.bubble {
+  max-width: 82%;
+  padding: 18rpx 24rpx;
+  border-radius: 18rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.bubble-ai {
+  background: var(--c-secondary-bg);
+  color: var(--c-text);
+}
+.bubble-me {
+  background: var(--c-primary);
+  color: #ffffff;
+}
+.src-row {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  max-width: 82%;
+  line-height: 1.6;
+}
+.src-link {
+  color: var(--c-accent);
+  text-decoration: underline;
+  margin-right: 8rpx;
+}
+.chat-input {
+  flex-shrink: 0;
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: var(--c-bg);
+  border-top: 1rpx solid var(--c-secondary-bg);
+}
+.chat-input-field {
+  flex: 1;
+  background: var(--c-secondary-bg);
+  border-radius: 999rpx;
+  padding: 16rpx 28rpx;
+  font-size: 28rpx;
+  color: var(--c-text);
+}
+.send-btn {
+  flex-shrink: 0;
+  background: var(--c-primary);
+  color: #ffffff;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  padding: 14rpx 32rpx;
+}
+.send-disabled {
+  opacity: 0.5;
+}

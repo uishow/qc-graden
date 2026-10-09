@@ -1,8 +1,20 @@
 <view class="page-root {{theme}}">
-  <!-- 顶部标题行 + 记一篇按钮（原右下角悬浮按钮会被自定义 tabBar 遮挡，改为普通按钮） -->
+  <!-- 顶部标题行 + 本周进展 + 记一篇按钮（原右下角悬浮按钮会被自定义 tabBar 遮挡，改为普通按钮） -->
   <view class="section-head">
     <view class="section-title">装修日记</view>
-    <view class="btn-add" bindtap="goEdit">＋ 记一篇</view>
+    <view style="display:flex;gap:12rpx;align-items:center">
+      <view class="btn-outline sm" bindtap="genWeekly">{{digestLoading ? '生成中…' : '本周进展'}}</view>
+      <view class="btn-add" bindtap="goEdit">＋ 记一篇</view>
+    </view>
+  </view>
+
+  <view wx:if="{{digestText}}" class="card" style="border-left:8rpx solid var(--c-accent)">
+    <view class="between">
+      <view style="font-weight:600">本周装修进展</view>
+      <view class="muted" bindtap="closeDigest">收起</view>
+    </view>
+    <view style="margin-top:12rpx;line-height:1.7;white-space:pre-wrap">{{digestText}}</view>
+    <view class="muted" style="margin-top:12rpx;font-size:24rpx">{{digestStats}}</view>
   </view>
 
   <view wx:if="{{empty}}" class="empty">

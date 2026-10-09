@@ -256,6 +256,10 @@ Page({
     wx.navigateTo({ url: `/pages/knowledge/detail?id=${e.currentTarget.dataset.id}` })
   },
 
+  goChat() {
+    wx.navigateTo({ url: '/pages/knowledge/chat' })
+  },
+
   goImport() {
     wx.navigateTo({ url: '/pages/knowledge/import' })
   },
