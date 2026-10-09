@@ -70,10 +70,51 @@ Page({
     const session = await app.ready()
     if (!session) return
     await this.load()
+    this.startWatch() // M3·L1 扩展：花费/材料实时监听（日记页试点已真机验证通过）
   },
 
   onHide() {
     this.setBarHidden(false) // 安全兜底：离开页面时恢复 tabBar
+    this.stopWatch() // 长连接随页面隐藏关闭，避免堆积
+  },
+
+  onUnload() {
+    this.stopWatch()
+  },
+
+  // —— M3·L1 实时监听扩展：expenses + materials 双 watcher（复用日记页试点模式）——
+  // 直接用 wx.cloud 客户端 SDK（适配层不支持 watch）；读权限放宽为 true，登录用户可监听。
+  startWatch() {
+    this.stopWatch() // 项目可能已切换，先关旧监听
+    if (!wx.cloud || typeof wx.cloud.database !== 'function') return
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return
+    try {
+      const db = wx.cloud.database()
+      const onChange = () => {
+        // 双 watcher 可能接连触发，500ms 去抖合并为一次刷新
+        clearTimeout(this._watchTimer)
+        this._watchTimer = setTimeout(() => this.load(), 500)
+      }
+      this._watchers = ['expenses', 'materials'].map((coll) =>
+        db.collection(coll).where({ project_id: projectId }).watch({
+          onChange,
+          onError: (e) => {
+            console.warn('[watch] ' + coll + ' 实时监听异常（不影响手动刷新）', e)
+          },
+        })
+      )
+    } catch (e) {
+      console.warn('[watch] 初始化失败（不影响手动刷新）', e)
+    }
+  },
+
+  stopWatch() {
+    clearTimeout(this._watchTimer)
+    ;(this._watchers || []).forEach((w) => {
+      try { w.close() } catch (e) {}
+    })
+    this._watchers = []
   },
 
   noop() {},
