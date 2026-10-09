@@ -1,4 +1,10 @@
 .bar {
+  /* 自锚定钉底（官方模板同款）：不再单纯依赖框架包装层定位，
+     包装层被重编译/键盘/原生节点增删搞乱时 bar 不再悬空半屏 */
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   background: #ffffff;
   border-top: 1rpx solid rgba(0, 0, 0, 0.06);
@@ -10,9 +16,12 @@
 
 .item { flex: 1; display: flex; justify-content: center; }
 .pill {
-  padding: 10rpx 26rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rpx;
+  padding: 8rpx 22rpx;
   border-radius: 999rpx;
-  font-size: 26rpx;
   color: var(--tab-muted);
   transition: background 0.2s, color 0.2s;
 }
@@ -20,4 +29,66 @@
   background: var(--tab-accent);
   color: #ffffff;
   font-weight: 600;
+}
+.pill-t { font-size: 22rpx; }
+.pill view, .pill text { transition: color 0.2s, background-color 0.2s, border-color 0.2s; }
+
+/* 图标：纯 CSS 几何形状，currentColor 继承胶囊文字色（未选中灰 / 选中白），零图片资源 */
+.ic {
+  width: 36rpx; height: 32rpx;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: inherit;
+}
+/* 首页：屋顶三角 + 房身 */
+.ic-home-roof {
+  width: 0; height: 0;
+  border-left: 16rpx solid transparent;
+  border-right: 16rpx solid transparent;
+  border-bottom: 11rpx solid currentColor;
+}
+.ic-home-body {
+  width: 24rpx; height: 14rpx;
+  background: currentColor;
+  border-radius: 0 0 5rpx 5rpx;
+  margin-top: 2rpx;
+}
+/* 日记：圆角笔记本 + 左侧装订线 */
+.ic-diary {
+  position: relative;
+  width: 24rpx; height: 30rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 4rpx 9rpx 9rpx 4rpx;
+  box-sizing: border-box;
+}
+.ic-diary-spine {
+  position: absolute; left: 5rpx; top: 4rpx; bottom: 4rpx;
+  width: 3rpx; border-radius: 2rpx; background: currentColor;
+}
+/* 花费：圆圈 ¥ */
+.ic-cost {
+  width: 30rpx; height: 30rpx;
+  border: 3rpx solid currentColor; border-radius: 50%;
+  box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+}
+.ic-cost-y { font-size: 17rpx; font-weight: 600; line-height: 1; }
+/* 知识库：文档框 + 两行文字线 */
+.ic-know {
+  position: relative;
+  width: 24rpx; height: 30rpx;
+  border: 3rpx solid currentColor; border-radius: 4rpx;
+  box-sizing: border-box;
+}
+.ic-know-line {
+  position: absolute; left: 4rpx; right: 4rpx;
+  height: 3rpx; border-radius: 2rpx; background: currentColor;
+}
+.ic-know-line.l1 { top: 7rpx; }
+.ic-know-line.l2 { top: 15rpx; }
+/* 我的：头 + 肩 */
+.ic-me-head { width: 14rpx; height: 14rpx; border-radius: 50%; background: currentColor; }
+.ic-me-body {
+  width: 26rpx; height: 12rpx;
+  border-radius: 13rpx 13rpx 0 0;
+  background: currentColor; margin-top: 3rpx;
 }

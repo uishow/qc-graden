@@ -7,11 +7,11 @@ Component({
     theme: 'theme-a',
     hidden: false, // 页面弹窗打开期间置 true 隐藏整条 tabBar（其层级高于弹窗会盖住底部按钮）
     list: [
-      { pagePath: '/pages/index/index', text: '首页' },
-      { pagePath: '/pages/diary/list', text: '日记' },
-      { pagePath: '/pages/budget/overview', text: '花费' },
-      { pagePath: '/pages/knowledge/index', text: '知识库' },
-      { pagePath: '/pages/user/profile', text: '我的' },
+      { pagePath: '/pages/index/index', text: '首页', icon: 'home' },
+      { pagePath: '/pages/diary/list', text: '日记', icon: 'diary' },
+      { pagePath: '/pages/budget/overview', text: '花费', icon: 'cost' },
+      { pagePath: '/pages/knowledge/index', text: '知识库', icon: 'know' },
+      { pagePath: '/pages/user/profile', text: '我的', icon: 'me' },
     ],
   },
   methods: {
