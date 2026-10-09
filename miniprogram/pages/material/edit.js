@@ -49,6 +49,9 @@ Page({
       const { data } = await cloud.database
         .from('materials').select('*').eq('id', options.id).limit(1)
       const d = data && data[0]
+      // 记录编辑前的原始状态/金额，用于「计划价冻结」规则（已执行项改实际价不动计划价）
+      this._origStatus = d ? d.status : null
+      this._origTotalPrice = d != null ? d.total_price : null
       if (d) {
         const stageIndex = this.data.stageIds.indexOf(d.stage_id || '')
         this.setData({
@@ -185,7 +188,17 @@ Page({
       if (d.id) {
         // 老数据可能没有 version 字段：仅当确有版本号时才加乐观锁校验，否则按 id 直接更新，避免编辑失败
         const baseVersion = d.baseVersion || 1
-        const { data, error } = await write.update('materials', this.projectId, d.id, { ...payload, version: baseVersion + 1 }, d.baseVersion)
+        const upd = { ...payload, version: baseVersion + 1 }
+        // 计划价冻结规则：
+        //  - 仍处「待购买」(to_buy) = 还在计划阶段，计划价随本次录入价更新；
+        //  - 已购买/已进场(bought/on_site) = 已执行，计划价定格（历史数据无 planned_price 时，以编辑前 total_price 为计划基线）。
+        //  这样「改实际成交价」只动 total_price，不会污染计划总额。
+        if (this._origStatus === 'to_buy') {
+          upd.planned_price = payload.total_price
+        } else if (this._origTotalPrice != null) {
+          upd.planned_price = this._origTotalPrice
+        }
+        const { data, error } = await write.update('materials', this.projectId, d.id, upd, d.baseVersion)
         if (error) throw error
         if (!data || data.length === 0) {
           wx.showModal({ title: '记录已被他人修改', content: '请返回查看最新版本后再编辑。', showCancel: false })
@@ -200,7 +213,8 @@ Page({
           })
         } catch (e2) {}
       } else {
-        const { error } = await write.insert('materials', this.projectId, { ...payload, version: 1, created_at: new Date().toISOString(), project_id: this.projectId })
+        // 新建即计划：计划价 = 录入价，定格
+        const { error } = await write.insert('materials', this.projectId, { ...payload, planned_price: payload.total_price, version: 1, created_at: new Date().toISOString(), project_id: this.projectId })
         if (error) throw error
       }
       wx.showToast({ title: '已保存' })

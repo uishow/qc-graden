@@ -54,10 +54,11 @@
           <view style="height:14rpx;width:{{matExecPercent}}%;background:var(--c-accent);border-radius:999rpx"></view>
         </view>
         <view class="between">
-          <view class="muted">已采购（执行）{{matPurchasedText}}</view>
-          <view class="muted">待采购（计划）{{matPendingText}}</view>
+          <view class="muted">已购（实际）{{matPurchasedText}}</view>
+          <view class="muted">待购（计划）{{matPendingText}}</view>
         </view>
         <view class="muted" style="font-size:22rpx;margin-top:6rpx">计划总额 {{materialTotalText}} · 已花费只计入已购部分，待购推进后自动计入</view>
+        <view wx:if="{{matPlanDeviationText}}" class="muted" style="font-size:22rpx;margin-top:4rpx">实际花费{{matPlanDeviationText}}（计划价已定格，改实际成交价不污染计划）</view>
       </view>
     </view>
 

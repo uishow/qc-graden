@@ -164,9 +164,16 @@ Page({
     const budget = projects && projects[0] ? Number(projects[0].budget || 0) : 0
     const list = expenses || []
     const mat = materials || []
-    // 已花费口径（与首页统一）：非材料手动花费 + 已购买/已进场材料；待购买(to_buy)不计入——推进后数字才会变化
+    // 已花费口径（与首页统一）：非材料手动花费 + 已购买/已进场材料(实际成交价)；待购买(to_buy)不计入——推进后数字才会变化
+    // 计划价 planned_price：创建时定格；已执行项改实际价不动计划价。无该字段的老数据回退 total_price。
+    const planOf = (m) => Number((m.planned_price != null ? m.planned_price : m.total_price) || 0)
     const purchasedMat = mat.filter((m) => m.status === 'bought' || m.status === 'on_site')
-    const matTotal = purchasedMat.reduce((s, m) => s + Number(m.total_price || 0), 0)
+    const matTotal = purchasedMat.reduce((s, m) => s + Number(m.total_price || 0), 0) // 实际已购
+    const purchasedPlanTotal = purchasedMat.reduce((s, m) => s + planOf(m), 0) // 已执行项的计划额
+    const planTotal = mat.reduce((s, m) => s + planOf(m), 0) // 计划总额（冻结）
+    const pendingPlanTotal = mat.filter((m) => m.status === 'to_buy').reduce((s, m) => s + planOf(m), 0) // 待购=计划
+    const matExecPercent = planTotal > 0 ? Math.round((purchasedPlanTotal / planTotal) * 100) : 0
+    const matPlanDeviation = matTotal - purchasedPlanTotal // 实际-计划（已执行项），正=超支
     const spent = list
       .filter((e) => e.type !== 'material')
       .reduce((s, e) => s + Number(e.amount || 0), 0) + matTotal
@@ -244,9 +251,6 @@ Page({
       .map((x) => ({ name: x.name, text: fen2yuan(x.total), total: x.total }))
     const matTypeMax = Math.max(0, ...matTypeTotals.map((x) => x.total))
     matTypeTotals.forEach((x) => { x.pct = matTypeMax ? Math.max(3, Math.round((x.total / matTypeMax) * 100)) : 0 })
-    const matPendingTotal = Math.max(0, mat.reduce((s, m) => s + Number(m.total_price || 0), 0) - matTotal)
-    const matPlanTotal = mat.reduce((s, m) => s + Number(m.total_price || 0), 0)
-    const matExecPercent = matPlanTotal > 0 ? Math.round((matTotal / matPlanTotal) * 100) : 0
 
     // 按花费类目：仅人工/设计/其他/订金·定金（材料由材料清单汇总，不再单列，杜绝重复）
     const typeSumArr = ['labor', 'design', 'deposit', 'other']
@@ -270,10 +274,11 @@ Page({
         attCount: (e.attachments || []).length,
       })),
       matEmpty: mat.length === 0,
-      matTotalText: fen2yuan(mat.reduce((s, m) => s + Number(m.total_price || 0), 0)),
+      matTotalText: fen2yuan(planTotal),
       matPurchasedText: fen2yuan(matTotal),
-      matPendingText: fen2yuan(matPendingTotal),
+      matPendingText: fen2yuan(pendingPlanTotal),
       matExecPercent,
+      matPlanDeviationText: matPlanDeviation === 0 ? '' : (matPlanDeviation > 0 ? '超支 ' : '节省 ') + fen2yuan(Math.abs(matPlanDeviation)),
       matGroups,
       wholeHouse,
       whMatTotalText: fen2yuan(whMatTotal),

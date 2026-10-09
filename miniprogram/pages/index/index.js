@@ -108,19 +108,23 @@ Page({
     })
 
     // 已花费口径（与花费页统一）：手动花费（排除历史材料类，避免与材料清单重复）
-    // + 已购买/已进场材料的合计；「待购买」还没花钱不计入——采购项「推进」后数字才会变化
+    // + 已购买/已进场材料的合计（实际成交价）；「待购买」还没花钱不计入——采购项「推进」后数字才会变化
+    // 计划价 planned_price：创建时定格；已执行项(已购/已进场)改实际价不动计划价。无该字段的老数据回退 total_price。
+    const planOf = (m) => Number((m.planned_price != null ? m.planned_price : m.total_price) || 0)
     const exp = expenses || []
     const mat = materials || []
     const expenseSpent = exp.filter((e) => e.type !== 'material').reduce((sum, e) => sum + Number(e.amount || 0), 0)
-    const purchasedMatTotal = mat
-      .filter((m) => m.status === 'bought' || m.status === 'on_site')
-      .reduce((sum, m) => sum + Number(m.total_price || 0), 0)
+    const purchasedMat = mat.filter((m) => m.status === 'bought' || m.status === 'on_site')
+    const purchasedMatTotal = purchasedMat.reduce((sum, m) => sum + Number(m.total_price || 0), 0) // 实际已花
+    const purchasedPlanTotal = purchasedMat.reduce((sum, m) => sum + planOf(m), 0) // 已执行项的计划额
+    const planTotal = mat.reduce((sum, m) => sum + planOf(m), 0) // 计划总额（冻结）
+    const pendingPlanTotal = mat.filter((m) => m.status === 'to_buy').reduce((sum, m) => sum + planOf(m), 0) // 待购=计划
     const spent = expenseSpent + purchasedMatTotal
     const spentPercent = project.budget > 0 ? Math.min(100, Math.round((spent / project.budget) * 100)) : 0
     const remain = Math.max(0, Number(project.budget || 0) - spent)
     const sums = {}
     exp.filter((e) => e.type !== 'material').forEach((e) => { sums[e.type] = (sums[e.type] || 0) + Number(e.amount || 0) })
-    // 饼图：已花费构成 = 材料（已购）+ 人工/设计/订金/其他；与「已花费」口径完全一致
+    // 饼图：已花费构成 = 材料（已购·实际）+ 人工/设计/订金/其他；与「已花费」口径完全一致
     const palette = PIE_PALETTES[this.data.theme] || PIE_PALETTES['theme-a']
     const pieValues = {
       material: purchasedMatTotal,
@@ -137,9 +141,8 @@ Page({
         text: fen2yuan(s.value),
         pct: spent > 0 ? Math.max(1, Math.round((s.value / spent) * 100)) : 0,
       }))
-    const materialTotal = mat.reduce((sum, m) => sum + Number(m.total_price || 0), 0)
-    const matPendingTotal = Math.max(0, materialTotal - purchasedMatTotal)
-    const matExecPercent = materialTotal > 0 ? Math.round((purchasedMatTotal / materialTotal) * 100) : 0
+    const matExecPercent = planTotal > 0 ? Math.round((purchasedPlanTotal / planTotal) * 100) : 0 // 计划执行率（按计划额，推进才变）
+    const matPlanDeviation = purchasedMatTotal - purchasedPlanTotal // 实际-计划（已执行项），正=超支
 
     this.setData({
       project,
@@ -153,10 +156,11 @@ Page({
       remainText: fen2yuan(remain),
       spentPercent,
       pieSlices,
-      materialTotalText: fen2yuan(materialTotal),
+      materialTotalText: fen2yuan(planTotal),
       matPurchasedText: fen2yuan(purchasedMatTotal),
-      matPendingText: fen2yuan(matPendingTotal),
+      matPendingText: fen2yuan(pendingPlanTotal),
       matExecPercent,
+      matPlanDeviationText: matPlanDeviation === 0 ? '' : (matPlanDeviation > 0 ? '超支 ' : '节省 ') + fen2yuan(Math.abs(matPlanDeviation)),
       latestDiaries: diaries || [],
     }, () => this.drawPie())
   },
