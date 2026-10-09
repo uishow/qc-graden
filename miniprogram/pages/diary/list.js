@@ -148,7 +148,10 @@ Page({
       wx.showToast({ title: (result && result.message) || '生成失败，请重试', icon: 'none' })
       return
     }
-    const content = [result.summary, result.stats].filter(Boolean).join('\n\n')
+    // AI 成功：正文=总结+统计附录；AI 失败：兜底报告已含统计，不再重复贴
+    const content = result.ai === false
+      ? result.summary
+      : [result.summary, result.stats].filter(Boolean).join('\n\n')
     try {
       // 草稿经storage传给编辑页（navigateTo 不便带长文本参数），编辑页预填后立即消费
       wx.setStorageSync('weeklyDraft:' + projectId, {

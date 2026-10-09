@@ -138,8 +138,21 @@ async function callLLM(s) {
   return txt ? String(txt).trim() : null
 }
 
+// 兜底：不用 AI 也要写成像样的周报（结构化 + 针对性提醒），而不是一行干巴巴的数字
 function fallbackSummary(s) {
-  return `本周新增日记 ${s.diaryCount} 篇、花费 ${s.expCount} 笔（合计 ¥${fen2yuanStr(s.expTotal)}）、材料 ${s.matCount} 项。`
+  const lines = []
+  lines.push(
+    `本周装修推进情况：新增日记 ${s.diaryCount} 篇、花费 ${s.expCount} 笔（合计 ¥${fen2yuanStr(s.expTotal)}）、材料 ${s.matCount} 项。`
+  )
+  if (s.expTop.length) lines.push(`花钱大头：${s.expTop.join('；')}。`)
+  if (s.matNames.length) lines.push(`材料进场：${s.matNames.join('、')}。`)
+  const tips = []
+  if (s.diaryCount === 0) tips.push('本周还没写日记，进度细节容易忘，记得随手补记')
+  if (s.matCount >= 3) tips.push('进场材料较多，收货时逐项核对型号、数量与完好度')
+  if (s.expTotal >= 1000000) tips.push('单周支出已过万，建议和预算表对一下大盘')
+  if (!tips.length) tips.push('节奏不错，下周继续保持记录习惯')
+  lines.push('小提醒：' + tips.join('；') + '。')
+  return lines.join('\n')
 }
 
 exports.main = async (event) => {
