@@ -1,5 +1,6 @@
 const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
+const access = require('../../utils/access')
 
 const app = getApp()
 
@@ -72,6 +73,14 @@ Page({
     try {
       const projectId = store.getCurrentProjectId()
       if (!projectId) {
+        this.setData({ groups: [], empty: true })
+        return
+      }
+      // 成员校验：本机残留的 projectId 可能来自已退出/被移除的项目，非 active 成员不放行
+      const user = await app.ready()
+      const myIds = await access.myProjectIds(user ? user.id : null)
+      if (myIds.indexOf(projectId) === -1) {
+        store.setCurrentProjectId(null)
         this.setData({ groups: [], empty: true })
         return
       }
