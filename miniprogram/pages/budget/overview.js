@@ -3,6 +3,7 @@ const store = require('../../utils/store')
 const { fen2yuan } = require('../../utils/format')
 const { BELONG_WHOLEHOUSE, isWholeHouseLike, isWholeHouseStage } = require('../../utils/wholehouse')
 const { exportExpensesTabCsv, exportMaterialsTabCsv, exportWholeHouseTabCsv } = require('../../utils/exportCsv')
+const cache = require('../../utils/cache')
 
 const app = getApp()
 
@@ -89,6 +90,9 @@ Page({
       this.setData({ empty: true })
       return
     }
+    // 增量同步 v1（stale-while-revalidate）：先渲染上次快照（秒开），再拉最新覆盖并回写缓存
+    const cached = cache.read(projectId, 'overview')
+    if (cached) this.render(cached)
     const [{ data: projects }, { data: expenses }, { data: materials }, { data: stages }] = await Promise.all([
       cloud.database.from('projects').select('budget').eq('id', projectId).limit(1),
       cloud.database.from('expenses').select('*').eq('project_id', projectId)
@@ -96,7 +100,13 @@ Page({
       cloud.database.from('materials').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
       cloud.database.from('stages').select('*').eq('project_id', projectId),
     ])
+    const snapshot = { projects: projects || [], expenses: expenses || [], materials: materials || [], stages: stages || [] }
+    cache.write(projectId, 'overview', snapshot)
+    this.render(snapshot)
+  },
 
+  // 由一份 {projects, expenses, materials, stages} 快照计算全部展示数据并渲染
+  render({ projects, expenses, materials, stages }) {
     // 花费：expenses 表（非材料类目）+ 材料合计，均计入预算（B 防重模型：
     // 材料不手填，统一由材料清单汇总，结构上杜绝重复）
     const budget = projects && projects[0] ? Number(projects[0].budget || 0) : 0
