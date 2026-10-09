@@ -39,5 +39,13 @@
     <view wx:if="{{attachments.length < 9}}" class="att-add" bindtap="addAttachment">＋ 添加</view>
   </view>
 
+  <view wx:if="{{revisions.length}}" class="card" style="margin-top:24rpx">
+    <view class="muted" style="margin-bottom:8rpx">修改历史</view>
+    <view wx:for="{{revisions}}" wx:key="index" class="between" style="padding:6rpx 0;font-size:24rpx">
+      <view class="muted">{{item.timeText}}</view>
+      <view>{{item.actionText}}<block wx:if="{{item.newVersion}}"> · v{{item.newVersion}}</block></view>
+    </view>
+  </view>
+
   <view class="btn-primary" style="margin-top:32rpx" bindtap="onSave">{{saving ? '保存中…' : '保存'}}</view>
 </view>

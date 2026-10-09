@@ -38,6 +38,7 @@ Page({
     payDate: today(),
     remark: '',
     attachments: [], // [{fileID, name, kind:'image'|'file'}] 附件凭证
+    revisions: [], // 修改历史（revisions，只读展示）
     saving: false,
   },
 
@@ -69,7 +70,23 @@ Page({
           attachments: att.normalizeList(d.attachments),
         })
       }
+      this.loadRevisions(options.id, 'expenses')
     }
+  },
+
+  // 修改历史：读本条的 revisions（安全规则按创建者隔离，看到的是本人操作痕迹）
+  async loadRevisions(docId, collection) {
+    const { data } = await cloud.database
+      .from('revisions').select('action,prev_version,new_version,created_at')
+      .eq('doc_id', docId).eq('collection', collection)
+      .order('created_at', { ascending: false }).limit(20)
+    this.setData({
+      revisions: (data || []).map((r) => ({
+        timeText: String(r.created_at || '').slice(0, 16).replace('T', ' '),
+        actionText: r.action === 'update' ? '修改' : r.action === 'create' ? '创建' : (r.action || '操作'),
+        newVersion: r.new_version || '',
+      })),
+    })
   },
 
   // 加载本项目阶段，供「所属阶段」可选关联（轻量关联：不强制）
@@ -192,6 +209,13 @@ Page({
           wx.showModal({ title: '记录已被他人修改', content: '请返回查看最新版本后再编辑。', showCancel: false })
           return
         }
+        // 追加修改历史（写入失败不影响已保存的数据）
+        try {
+          await cloud.database.from('revisions').insert({
+            project_id: this.projectId, collection: 'expenses', doc_id: id,
+            action: 'update', prev_version: baseVersion || 1, new_version: (baseVersion || 1) + 1,
+          })
+        } catch (e2) {}
       } else {
         const { error } = await cloud.database
           .from('expenses').insert({ ...payload, version: 1, created_at: new Date().toISOString(), deleted: false, project_id: this.projectId })
