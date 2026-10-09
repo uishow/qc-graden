@@ -13,8 +13,16 @@ Page({
     projects: [], // [{ id, name, role, roleLabel, isManager, isCurrent }]
     currentProjectId: null,
     myOpenid: null,
+    myNick: '', // 自己的昵称（profiles.nick_name，login 云函数 setNick 修改）
+    // 昵称设置弹窗
+    showNick: false,
+    nickValue: '',
+    nickFocus: false, // 一次性自动聚焦开关（同 joinFocus，防 focus 常驻 true 无法再聚焦）
+    savingNick: false,
     showJoin: false,
     joinCode: '',
+    codeCells: [{ idx: 0, v: '' }, { idx: 1, v: '' }, { idx: 2, v: '' }, { idx: 3, v: '' }, { idx: 4, v: '' }, { idx: 5, v: '' }],
+    joinFocus: false, // 自动聚焦一次性开关：打开弹窗 300ms 后置 true，失焦即复位（focus 常驻 true 会导致无法再次聚焦）
     kbHeight: 0, // 键盘高度（px）：邀请码输入时把弹窗整体顶到键盘上方
     // 成员管理面板
     showManage: false,
@@ -37,10 +45,17 @@ Page({
     if (!session) return
     const openid = session.id
     this.setData({ myOpenid: openid })
+    // 取自己昵称（profiles 所有人可读；写走 login 云函数 setNick）
+    try {
+      const { data: profRows } = await cloud.database
+        .from('profiles').select('nick_name').eq('owner_id', openid).limit(1)
+      this.setData({ myNick: (profRows && profRows[0] && profRows[0].nick_name) || '' })
+    } catch (e) { /* 读失败不影响页面，昵称显示为未设置 */ }
     await this.loadProjects(openid)
   },
 
   onHide() {
+    clearTimeout(this._nickTimer)
     if (this._kbHandler) {
       wx.offKeyboardHeightChange(this._kbHandler)
       this._kbHandler = null
@@ -110,25 +125,93 @@ Page({
     await exportExpensesCsv(cloud, projectId)
   },
 
+  // —— 我的昵称：成员列表/日记/评论显示的名字；写走 login 云函数（profiles 仅服务端可写）——
+  openNick() {
+    this.setBarHidden(true)
+    this.setData({ showNick: true, nickValue: this.data.myNick || '', nickFocus: false })
+    clearTimeout(this._nickTimer)
+    this._nickTimer = setTimeout(() => this.setData({ nickFocus: true }), 300)
+  },
+  onNickInput(e) {
+    this.setData({ nickValue: e.detail.value })
+  },
+  onNickBlur() {
+    this.setData({ nickFocus: false })
+  },
+  cancelNick() {
+    clearTimeout(this._nickTimer)
+    this.setBarHidden(false)
+    this.setData({ showNick: false, nickFocus: false })
+  },
+  async saveNick() {
+    const nick = (this.data.nickValue || '').trim()
+    if (!nick) {
+      wx.showToast({ title: '请输入昵称', icon: 'none' })
+      return
+    }
+    if (this.data.savingNick) return
+    this.setData({ savingNick: true })
+    let result = null
+    try {
+      const r = await wx.cloud.callFunction({ name: 'login', data: { setNick: nick } })
+      result = r.result
+    } catch (e) {
+      result = null
+    }
+    this.setData({ savingNick: false })
+    if (!result || !result.ok) {
+      wx.showToast({ title: (result && result.error) || '保存失败，请重试', icon: 'none' })
+      return
+    }
+    clearTimeout(this._nickTimer)
+    this.setBarHidden(false)
+    this.setData({ showNick: false, nickFocus: false, myNick: nick })
+    wx.showToast({ title: '昵称已保存', icon: 'success' })
+    // 成员管理面板若开着，刷新成员名显示
+    if (this.data.showManage && this.data.managing) {
+      await this.loadMemberList(this.data.managing.id)
+    }
+  },
+
   // 邀请码加入
   goJoin() {
     this.setBarHidden(true)
-    this.setData({ showJoin: true, joinCode: '' })
+    this._applyCode('')
+    this.setData({ showJoin: true, joinFocus: false })
+    // 延迟自动聚焦：wx:if 刚创建就 focus 在部分机型会失灵（键盘闪退后再点输入框无响应）
+    clearTimeout(this._focusTimer)
+    this._focusTimer = setTimeout(() => this.setData({ joinFocus: true }), 300)
+  },
+  // 回填邀请码：只留数字、截 6 位；同时驱动 6 个格子显示（不依赖输入框原生回显，
+  // 规避部分机型 number/digit 键盘「敲了不显示」的回显 bug）
+  _applyCode(v) {
+    const digits = String(v || '').replace(/\D/g, '').slice(0, 6)
+    const cells = []
+    for (let i = 0; i < 6; i++) cells.push({ idx: i, v: digits[i] || '' })
+    this.setData({ joinCode: digits, codeCells: cells })
   },
   onJoinInput(e) {
-    this.setData({ joinCode: e.detail.value })
+    this._applyCode(e.detail.value)
+  },
+  // 失焦即复位 focus 开关：保证之后每次点击输入框都能重新拉起键盘
+  onJoinBlur() {
+    this.setData({ joinFocus: false })
   },
   cancelJoin() {
+    clearTimeout(this._focusTimer)
     this.setBarHidden(false)
-    this.setData({ showJoin: false, joinCode: '' })
+    this._applyCode('')
+    this.setData({ showJoin: false, joinFocus: false })
   },
   noop() {},
   async confirmJoin() {
     const code = (this.data.joinCode || '').trim()
     if (!/^\d{6}$/.test(code)) {
+      this.setData({ joinFocus: false }) // 弹窗保持打开，复位聚焦让用户可再点输入框
       wx.showToast({ title: '请输入 6 位邀请码', icon: 'none' })
       return
     }
+    clearTimeout(this._focusTimer)
     wx.showLoading({ title: '加入中', mask: true })
     // 注意：showLoading/showToast 共用同一原生单例，hideLoading 必须在 showToast 之前，
     // 否则错误提示刚弹出就被 hideLoading 关掉（表现为「输错码没有任何提示」）
@@ -147,7 +230,8 @@ Page({
     }
     store.setCurrentProjectId(result.project.id)
     this.setBarHidden(false)
-    this.setData({ showJoin: false, joinCode: '', currentProjectId: result.project.id })
+    this._applyCode('')
+    this.setData({ showJoin: false, joinFocus: false, currentProjectId: result.project.id })
     wx.showToast({ title: '已加入：' + result.project.name, icon: 'success' })
     await this.loadProjects(this.data.myOpenid)
   },

@@ -1,28 +1,40 @@
 /* 首页样式来自 app.wxss 主题令牌；以下为看板专属类 */
-/* 施工进度阶段状态：三态配色要一眼可辨
-   - 未开始 pending：中性灰（浅底+灰字，无强调）
-   - 进行中 doing：金色填充（强调当前正在推进）
-   - 已完成 done：绿色填充（明确收尾） */
-.stage-chip {
-  font-size: 22rpx;
-  padding: 6rpx 16rpx;
-  border-radius: 999rpx;
-  background: var(--c-secondary-bg);
-  color: var(--c-text-2);
-  border: 1rpx solid transparent;
+
+/* 施工进度竖向时间轴：圆点+连线逐行列出阶段；已完成绿实心 / 进行中金色放大 / 未开始灰空心 */
+.tl-row { display: flex; }
+.tl-rail { width: 40rpx; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+.tl-dot {
+  width: 18rpx; height: 18rpx; border-radius: 50%; margin-top: 10rpx;
+  box-sizing: border-box; flex-shrink: 0;
 }
-.stage-chip.doing {
-  color: var(--c-accent);
-  border-color: var(--c-accent);
-  background: var(--c-accent-bg);
-  font-weight: 600;
+.tl-dot.done { background: var(--c-success); }
+.tl-dot.doing {
+  width: 24rpx; height: 24rpx; margin-top: 7rpx;
+  background: var(--c-accent); border: 5rpx solid var(--c-accent-bg);
 }
-.stage-chip.done {
-  color: var(--c-success);
-  background: var(--c-success-bg);
-  border-color: var(--c-success);
-  font-weight: 600;
+.tl-dot.pending { background: var(--c-card); border: 2rpx solid var(--c-card-border); }
+.tl-line { flex: 1; width: 2rpx; background: var(--c-card-border); margin-top: 4rpx; }
+.tl-main {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; justify-content: space-between;
+  padding: 4rpx 0 22rpx 16rpx;
 }
+.tl-row.tl-last .tl-main { padding-bottom: 4rpx; }
+.tl-name { font-size: 26rpx; color: var(--c-text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tl-name.doing { color: var(--c-accent); font-weight: 600; }
+.tl-name.pending { color: var(--c-text-2); }
+.tl-date { font-size: 22rpx; color: var(--c-text-2); flex-shrink: 0; padding-left: 12rpx; }
+.tl-date.doing { color: var(--c-accent); }
+
+/* 费用总览环形图：canvas 画扇区，图例用 WXML（文字清晰、跟随主题） */
+.pie-canvas { width: 100%; height: 340rpx; display: block; }
+.pie-legend { display: flex; flex-wrap: wrap; margin-top: 4rpx; }
+.pie-legend-item {
+  width: 50%; box-sizing: border-box; padding: 6rpx 0;
+  display: flex; align-items: center; gap: 10rpx; min-width: 0;
+}
+.pie-dot { width: 18rpx; height: 18rpx; border-radius: 6rpx; flex-shrink: 0; }
+.pie-legend-name { font-size: 24rpx; color: var(--c-text-2); flex-shrink: 0; }
+.pie-legend-val { font-size: 24rpx; color: var(--c-text); font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* 最新日记：压成单行（左标题省略，右日期+张数） */
 .card.diary-card { padding: 4rpx 24rpx; }

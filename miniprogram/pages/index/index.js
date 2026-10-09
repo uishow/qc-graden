@@ -4,7 +4,14 @@ const access = require('../../utils/access')
 const { fen2yuan } = require('../../utils/format')
 
 const app = getApp()
-const TYPE_NAMES = { material: '材料', labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }
+
+// 饼图配色：两主题各一套，材料/人工/设计/订金/其他 固定顺序取色（画布扇区与图例圆点同色）
+const PIE_PALETTES = {
+  'theme-a': ['#3F5A4C', '#B08A47', '#8C5A3B', '#D9C08A', '#8A7E72'],
+  'theme-b': ['#6E7F8D', '#C2A878', '#3E3E42', '#D8CBB2', '#8B8B90'],
+}
+const PIE_ORDER = ['material', 'labor', 'design', 'deposit', 'other']
+const PIE_LABELS = { material: '材料（已购）', labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }
 
 Page({
   data: {
@@ -15,17 +22,19 @@ Page({
     stageDone: 0,
     stageTotal: 0,
     stagePercent: 0,
-    stageChips: [],
+    timeline: [],
     spentText: '¥0.00',
     budgetText: '¥0.00',
     remainText: '¥0.00',
     spentPercent: 0,
-    typeSums: [],
+    pieSlices: [],
     materialTotalText: '¥0.00',
     latestDiaries: [],
     noProject: false,
     showJoin: false,
     joinCode: '',
+    codeCells: [{ idx: 0, v: '' }, { idx: 1, v: '' }, { idx: 2, v: '' }, { idx: 3, v: '' }, { idx: 4, v: '' }, { idx: 5, v: '' }],
+    joinFocus: false, // 自动聚焦一次性开关：打开弹窗 300ms 后置 true，失焦即复位（focus 常驻 true 会导致无法再次聚焦）
     kbHeight: 0, // 键盘高度（px）：邀请码输入时把弹窗整体顶到键盘上方
   },
 
@@ -83,7 +92,19 @@ Page({
     const stageDone = list.filter((s) => s.status === 'done').length
     const stageTotal = list.length
     const stagePercent = stageTotal ? Math.round((stageDone / stageTotal) * 100) : 0
-    const stageChips = list.map((s) => ({ name: s.name, status: s.status || 'pending' }))
+
+    // 竖向时间轴：已完成绿实心（带起止日期）、进行中金色高亮、未开始灰空心。
+    // 圆点+连线天然成型，没有日期的阶段也不显空，无空轨道问题
+    const timeline = list.map((s, i) => {
+      const status = s.status || 'pending'
+      let dateText = ''
+      if (status === 'done' && s.start_date) {
+        dateText = String(s.start_date).slice(5) + (s.end_date ? ' ~ ' + String(s.end_date).slice(5) : ' ~')
+      } else if (status === 'doing' && s.start_date) {
+        dateText = String(s.start_date).slice(5) + ' 起 · 进行中'
+      }
+      return { idx: i, name: s.name, status, dateText }
+    })
 
     // 已花费口径（与花费页统一）：手动花费（排除历史材料类，避免与材料清单重复）
     // + 已购买/已进场材料的合计；「待购买」还没花钱不计入——采购项「推进」后数字才会变化
@@ -98,9 +119,23 @@ Page({
     const remain = Math.max(0, Number(project.budget || 0) - spent)
     const sums = {}
     exp.filter((e) => e.type !== 'material').forEach((e) => { sums[e.type] = (sums[e.type] || 0) + Number(e.amount || 0) })
-    const typeSums = Object.keys(TYPE_NAMES)
-      .filter((t) => sums[t])
-      .map((t) => ({ name: TYPE_NAMES[t], text: fen2yuan(sums[t]) }))
+    // 饼图：已花费构成 = 材料（已购）+ 人工/设计/订金/其他；与「已花费」口径完全一致
+    const palette = PIE_PALETTES[this.data.theme] || PIE_PALETTES['theme-a']
+    const pieValues = {
+      material: purchasedMatTotal,
+      labor: sums.labor || 0,
+      design: sums.design || 0,
+      deposit: sums.deposit || 0,
+      other: sums.other || 0,
+    }
+    const pieSlices = PIE_ORDER
+      .map((k, i) => ({ key: k, name: PIE_LABELS[k], value: pieValues[k], color: palette[i] }))
+      .filter((s) => s.value > 0)
+      .map((s) => ({
+        ...s,
+        text: fen2yuan(s.value),
+        pct: spent > 0 ? Math.max(1, Math.round((s.value / spent) * 100)) : 0,
+      }))
     const materialTotal = mat.reduce((sum, m) => sum + Number(m.total_price || 0), 0)
     const matPendingTotal = Math.max(0, materialTotal - purchasedMatTotal)
 
@@ -110,17 +145,82 @@ Page({
       stageDone,
       stageTotal,
       stagePercent,
-      stageChips,
+      timeline,
       spentText: fen2yuan(spent),
       budgetText: fen2yuan(project.budget),
       remainText: fen2yuan(remain),
       spentPercent,
-      typeSums,
+      pieSlices,
       materialTotalText: fen2yuan(materialTotal),
       matPurchasedText: fen2yuan(purchasedMatTotal),
       matPendingText: fen2yuan(matPendingTotal),
       latestDiaries: diaries || [],
-    })
+    }, () => this.drawPie())
+  },
+
+  // 环形图（canvas 2d）：中心显示已花费总额，扇区为各花费类目占比；随主题换色
+  drawPie() {
+    const slices = this.data.pieSlices || []
+    this.createSelectorQuery()
+      .select('#pieCanvas').fields({ node: true, size: true })
+      .exec((res) => {
+        const info = res && res[0]
+        if (!info || !info.node) return
+        const { node: canvas, width, height } = info
+        if (!width || !height) return // home-main 处于 hidden 时尺寸为 0，等显示后再画
+        const win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()
+        const dpr = win.pixelRatio || 2
+        canvas.width = width * dpr
+        canvas.height = height * dpr
+        const ctx = canvas.getContext('2d')
+        ctx.scale(dpr, dpr)
+        ctx.clearRect(0, 0, width, height)
+        const cx = width / 2
+        const cy = height / 2
+        const R = Math.min(cx, cy) - 4
+        const r = R * 0.6
+        const isB = this.data.theme === 'theme-b'
+        const track = isB ? '#EEF1F4' : '#EDF3EF'
+        const textMain = isB ? '#232326' : '#3A322B'
+        const textSub = isB ? '#8B8B90' : '#8A7E72'
+        // 底环（空数据时的占位轨道）
+        ctx.beginPath()
+        ctx.arc(cx, cy, R, 0, Math.PI * 2)
+        ctx.arc(cx, cy, r, Math.PI * 2, 0, true)
+        ctx.closePath()
+        ctx.fillStyle = track
+        ctx.fill()
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        if (!slices.length) {
+          ctx.fillStyle = textSub
+          ctx.font = '12px sans-serif'
+          ctx.fillText('还没有花费记录', cx, cy)
+          return
+        }
+        const total = slices.reduce((s, x) => s + x.value, 0) || 1
+        const gap = slices.length > 1 ? 0.035 : 0 // 扇区间留缝更好认
+        let a = -Math.PI / 2
+        slices.forEach((s) => {
+          const ang = (s.value / total) * Math.PI * 2
+          if (ang > gap) {
+            ctx.beginPath()
+            ctx.arc(cx, cy, R, a + gap / 2, a + ang - gap / 2)
+            ctx.arc(cx, cy, r, a + ang - gap / 2, a + gap / 2, true)
+            ctx.closePath()
+            ctx.fillStyle = s.color
+            ctx.fill()
+          }
+          a += ang
+        })
+        // 中心：已花费 + 金额
+        ctx.fillStyle = textSub
+        ctx.font = '11px sans-serif'
+        ctx.fillText('已花费', cx, cy - 12)
+        ctx.fillStyle = textMain
+        ctx.font = 'bold 14px sans-serif'
+        ctx.fillText(this.data.spentText, cx, cy + 8)
+      })
   },
 
   goCreate() {
@@ -128,22 +228,42 @@ Page({
   },
   goJoin() {
     this.setBarHidden(true)
-    this.setData({ showJoin: true, joinCode: '' })
+    this._applyCode('')
+    this.setData({ showJoin: true, joinFocus: false })
+    // 延迟自动聚焦：wx:if 刚创建就 focus 在部分机型会失灵（键盘闪退后再点输入框无响应）
+    clearTimeout(this._focusTimer)
+    this._focusTimer = setTimeout(() => this.setData({ joinFocus: true }), 300)
   },
   noop() {},
+  // 回填邀请码：只留数字、截 6 位；同时驱动 6 个格子显示（不依赖输入框原生回显，
+  // 规避部分机型 number/digit 键盘「敲了不显示」的回显 bug）
+  _applyCode(v) {
+    const digits = String(v || '').replace(/\D/g, '').slice(0, 6)
+    const cells = []
+    for (let i = 0; i < 6; i++) cells.push({ idx: i, v: digits[i] || '' })
+    this.setData({ joinCode: digits, codeCells: cells })
+  },
   onJoinInput(e) {
-    this.setData({ joinCode: e.detail.value })
+    this._applyCode(e.detail.value)
+  },
+  // 失焦即复位 focus 开关：保证之后每次点击输入框都能重新拉起键盘
+  onJoinBlur() {
+    this.setData({ joinFocus: false })
   },
   cancelJoin() {
+    clearTimeout(this._focusTimer)
     this.setBarHidden(false)
-    this.setData({ showJoin: false, joinCode: '' })
+    this._applyCode('')
+    this.setData({ showJoin: false, joinFocus: false })
   },
   async confirmJoin() {
     const code = (this.data.joinCode || '').trim()
     if (!/^\d{6}$/.test(code)) {
+      this.setData({ joinFocus: false }) // 弹窗保持打开，复位聚焦让用户可再点输入框
       wx.showToast({ title: '请输入 6 位邀请码', icon: 'none' })
       return
     }
+    clearTimeout(this._focusTimer)
     wx.showLoading({ title: '加入中', mask: true })
     // showLoading/showToast 共用同一原生单例：hideLoading 必须在 showToast 之前，
     // 否则错误提示刚弹出就被关掉（「输错码无提示」根因）
@@ -162,7 +282,8 @@ Page({
     }
     store.setCurrentProjectId(result.project.id)
     this.setBarHidden(false)
-    this.setData({ showJoin: false, joinCode: '' })
+    this._applyCode('')
+    this.setData({ showJoin: false, joinFocus: false })
     wx.showToast({ title: '已加入：' + result.project.name, icon: 'success' })
     await this.loadDashboard()
   },

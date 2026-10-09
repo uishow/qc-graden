@@ -191,18 +191,20 @@
   margin-top: 16rpx;
   border-top: 1rpx solid var(--c-card-border);
 }
-.join-input {
-  background: var(--c-card);
-  border: 1rpx solid var(--c-card-border);
-  border-radius: 16rpx;
-  padding: 24rpx;
-  font-size: 40rpx;
-  letter-spacing: 12rpx;
-  text-align: center;
-  color: var(--c-text); /* 显式文字色，避免继承自弹窗/遮罩时因配色相同导致敲的数字看不见 */
-  line-height: 1.4;
-  width: 100%;
-  box-sizing: border-box;
+/* 邀请码 6 格输入：透明 input 覆盖在格子上负责聚焦/收键盘，
+   格子里显示的数字由 data 驱动渲染——彻底规避部分机型 number/digit 键盘「敲了不回显」的 bug */
+.code-wrap { position: relative; width: 100%; }
+.code-cells { display: flex; gap: 12rpx; }
+.code-cell {
+  flex: 1; height: 96rpx; border-radius: 16rpx;
+  background: var(--c-card); border: 1rpx solid var(--c-card-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40rpx; font-weight: 600; color: var(--c-text); box-sizing: border-box;
+}
+.code-cell-on { border-color: var(--c-accent); background: var(--c-accent-bg); }
+.code-input {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  opacity: 0; z-index: 2;
 }
 .btn-sm {
   font-size: 24rpx;
