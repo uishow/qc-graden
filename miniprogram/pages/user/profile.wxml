@@ -49,6 +49,13 @@
       </view>
       <view class="muted">CSV · ›</view>
     </view>
+    <view wx:if="{{isAnyManager}}" class="card between" bindtap="openAI">
+      <view class="row" style="gap:16rpx">
+        <view style="font-size:30rpx">🤖</view>
+        <view>AI 设置</view>
+      </view>
+      <view class="muted">{{aiKeyTail ? '已配置 · 尾' + aiKeyTail + ' ›' : '未配置 · ›'}}</view>
+    </view>
 
     <view style="font-weight:600;margin:32rpx 0 12rpx">外观</view>
     <view class="card">
@@ -166,6 +173,23 @@
       <view class="row" style="gap:16rpx;margin-top:28rpx">
         <view class="btn-outline flex1" bindtap="cancelNick">取消</view>
         <view class="btn-primary flex1" bindtap="saveNick">{{savingNick ? '保存中…' : '保存'}}</view>
+      </view>
+    </view>
+  </view>
+  <!-- AI 设置弹窗（管理员专属，配置集中存 app_settings，三个 AI 函数共用） -->
+  <view wx:if="{{showAISet}}" class="mask" bindtap="cancelAI">
+    <view class="sheet" catchtap="noop" style="margin-bottom: {{kbHeight}}px">
+      <view style="font-weight:600;font-size:32rpx;margin-bottom:8rpx">AI 设置（大模型）</view>
+      <view class="muted" style="margin-bottom:20rpx">集中配置，问答 / 摘要 / 周报共用；仅家庭成员可见</view>
+      <view class="muted" style="margin-bottom:8rpx;font-size:24rpx">接口地址（如 https://api.deepseek.com/v1）</view>
+      <input class="input" type="text" placeholder="https://api.deepseek.com/v1" value="{{aiForm.base_url}}" bindinput="onAIInput" data-field="base_url" adjust-position="{{false}}" />
+      <view class="muted" style="margin:16rpx 0 8rpx;font-size:24rpx">模型名（如 deepseek-chat）</view>
+      <input class="input" type="text" placeholder="deepseek-chat" value="{{aiForm.model}}" bindinput="onAIInput" data-field="model" adjust-position="{{false}}" />
+      <view class="muted" style="margin:16rpx 0 8rpx;font-size:24rpx">API Key{{aiConfigured ? '（已配置·尾' + aiKeyTail + '，留空不修改）' : ''}}</view>
+      <input class="input" type="text" password placeholder="{{aiConfigured ? '留空不修改' : 'sk-…'}}" value="{{aiForm.api_key}}" bindinput="onAIInput" data-field="api_key" adjust-position="{{false}}" />
+      <view class="row" style="gap:16rpx;margin-top:28rpx">
+        <view class="btn-outline flex1" bindtap="cancelAI">取消</view>
+        <view class="btn-primary flex1" bindtap="saveAI">{{aiSaving ? '保存中…' : '保存'}}</view>
       </view>
     </view>
   </view>

@@ -82,11 +82,26 @@ function buildContext(articles, question) {
   return { context, sources }
 }
 
-async function callLLM(context, question) {
+// LLM 配置：app_settings 集合优先（管理端独占，「我的」页 AI 设置维护），未配置回退环境变量。
+// 集合不存在/读失败一律回退 env，不阻断。
+async function getLLMConfig() {
+  try {
+    const r = await cloud.database().collection('app_settings').where({ key: 'llm' }).limit(1).get()
+    const d = r.data && r.data[0]
+    if (d && d.api_key && d.base_url) {
+      return { base: normalizeBase(d.base_url), key: String(d.api_key).trim(), model: String(d.model || 'deepseek-chat').trim() }
+    }
+  } catch (e) { /* 集合不存在等 → 回退环境变量 */ }
   const base = normalizeBase(process.env.LLM_BASE_URL)
   const key = String(process.env.LLM_API_KEY || '').trim()
   const model = String(process.env.LLM_MODEL || 'deepseek-chat').trim()
-  if (!base || !key) return null
+  return base && key ? { base, key, model } : null
+}
+
+async function callLLM(context, question) {
+  const cfg = await getLLMConfig()
+  if (!cfg) return null
+  const { base, key, model } = cfg
   const prompt = [
     '以下是家庭装修知识库中检索到的内容片段：',
     context,

@@ -91,11 +91,25 @@ function statsText(s) {
   ].join('\n')
 }
 
-async function callLLM(s) {
+// LLM 配置：app_settings 集合优先（管理端独占，「我的」页 AI 设置维护），未配置回退环境变量。
+async function getLLMConfig() {
+  try {
+    const r = await cloud.database().collection('app_settings').where({ key: 'llm' }).limit(1).get()
+    const d = r.data && r.data[0]
+    if (d && d.api_key && d.base_url) {
+      return { base: normalizeBase(d.base_url), key: String(d.api_key).trim(), model: String(d.model || 'deepseek-chat').trim() }
+    }
+  } catch (e) { /* 集合不存在等 → 回退环境变量 */ }
   const base = normalizeBase(process.env.LLM_BASE_URL)
   const key = String(process.env.LLM_API_KEY || '').trim()
   const model = String(process.env.LLM_MODEL || 'deepseek-chat').trim()
-  if (!base || !key) return null
+  return base && key ? { base, key, model } : null
+}
+
+async function callLLM(s) {
+  const cfg = await getLLMConfig()
+  if (!cfg) return null
+  const { base, key, model } = cfg
   const prompt = [
     '这是家庭装修项目最近 7 天的活动记录，请写一段 120 字以内的「本周装修进展」中文总结，',
     '语气轻松务实，面向家庭成员；没有变化的维度不用提，结尾可给一句下周建议。',

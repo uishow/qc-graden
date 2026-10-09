@@ -1,0 +1,9 @@
+{
+  "name": "aiAdmin",
+  "version": "1.0.0",
+  "description": "LLM 集中配置管理（app_settings，仅家庭成员可读写）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

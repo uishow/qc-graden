@@ -30,6 +30,13 @@ Page({
     managingIsOwner: false,
     codes: null, // { family, member }
     memberList: [], // [{ _id, nick, role, roleLabel, isSelf }]
+    // AI 设置弹窗（管理员专属；集中配置存 app_settings，三个 AI 函数共用）
+    isAnyManager: false,
+    showAISet: false,
+    aiForm: { base_url: '', model: '', api_key: '' },
+    aiConfigured: false,
+    aiKeyTail: '',
+    aiSaving: false,
   },
 
   async onShow() {
@@ -93,7 +100,7 @@ Page({
         isCurrent: p.id === current,
       }
     })
-    this.setData({ projects })
+    this.setData({ projects, isAnyManager: projects.some((p) => p.isManager) })
   },
 
   switchProject(e) {
@@ -234,6 +241,66 @@ Page({
     this.setData({ showJoin: false, joinFocus: false, currentProjectId: result.project.id })
     wx.showToast({ title: '已加入：' + result.project.name, icon: 'success' })
     await this.loadProjects(this.data.myOpenid)
+  },
+
+  // —— AI 设置（管理员专属）：集中配置存 app_settings，askAI/weeklyDigest/enrichArticle 共用 ——
+  async openAI() {
+    this.setBarHidden(true)
+    this.setData({ showAISet: true, aiConfigured: false, aiKeyTail: '', aiForm: { base_url: '', model: '', api_key: '' } })
+    try {
+      const r = await wx.cloud.callFunction({ name: 'aiAdmin', data: { action: 'get' } })
+      const res = r && r.result
+      if (res && res.ok && res.configured) {
+        this.setData({
+          aiConfigured: true,
+          aiKeyTail: res.keyTail || '',
+          aiForm: { base_url: res.base_url || '', model: res.model || '', api_key: '' }, // 密钥不回显，留空=不修改
+        })
+      }
+    } catch (e) { /* 预填失败给空表单，不影响配置 */ }
+  },
+
+  onAIInput(e) {
+    const field = e.currentTarget.dataset.field
+    this.setData({ ['aiForm.' + field]: e.detail.value })
+  },
+
+  cancelAI() {
+    this.setBarHidden(false)
+    this.setData({ showAISet: false })
+  },
+
+  async saveAI() {
+    const f = this.data.aiForm
+    if (!f.base_url.trim() || !f.model.trim()) {
+      wx.showToast({ title: '接口地址与模型名必填', icon: 'none' })
+      return
+    }
+    if (!this.data.aiConfigured && !f.api_key.trim()) {
+      wx.showToast({ title: '请填写 API Key', icon: 'none' })
+      return
+    }
+    this.setData({ aiSaving: true })
+    // showLoading/showToast 共用原生单例：hideLoading 必须在 showToast 之前
+    let result = null
+    try {
+      const r = await wx.cloud.callFunction({
+        name: 'aiAdmin',
+        data: { action: 'save', base_url: f.base_url.trim(), model: f.model.trim(), api_key: f.api_key.trim() },
+      })
+      result = r && r.result
+    } catch (e) {
+      result = { ok: false, message: '网络异常，请重试' }
+    } finally {
+      this.setData({ aiSaving: false })
+    }
+    if (!result || !result.ok) {
+      wx.showToast({ title: (result && result.message) || '保存失败，请重试', icon: 'none' })
+      return
+    }
+    this.cancelAI()
+    this.setData({ aiConfigured: true, aiKeyTail: '****' })
+    wx.showToast({ title: '已保存，全端生效' })
   },
 
   // 成员管理面板（仅管理员可打开）

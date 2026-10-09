@@ -271,12 +271,27 @@ async function inlineImages(body, referer, deadline) {
   return { body: body.replace(/\n{3,}/g, '\n\n').trim(), count }
 }
 
-// 调大模型生成 {summary, tags}；未配置或失败返回 null（由调用方降级）
-async function callLLM(source, fallbackTitle) {
+// LLM 配置：app_settings 集合优先（管理端独占，「我的」页 AI 设置维护），未配置回退环境变量。
+// 集合不存在/读失败一律回退 env，不阻断。
+async function getLLMConfig() {
+  try {
+    const r = await cloud.database().collection('app_settings').where({ key: 'llm' }).limit(1).get()
+    const d = r.data && r.data[0]
+    if (d && d.api_key && d.base_url) {
+      return { base: normalizeBase(d.base_url), key: String(d.api_key).trim(), model: String(d.model || 'deepseek-chat').trim() }
+    }
+  } catch (e) { /* 集合不存在等 → 回退环境变量 */ }
   const base = normalizeBase(process.env.LLM_BASE_URL)
   const key = String(process.env.LLM_API_KEY || '').trim()
   const model = String(process.env.LLM_MODEL || 'deepseek-chat').trim()
-  if (!base || !key) return null
+  return base && key ? { base, key, model } : null
+}
+
+// 调大模型生成 {summary, tags}；未配置或失败返回 null（由调用方降级）
+async function callLLM(source, fallbackTitle) {
+  const cfg = await getLLMConfig()
+  if (!cfg) return null
+  const { base, key, model } = cfg
   const prompt = [
     '请为下面这条装修知识库内容写一段中文摘要（2-3句，概括核心信息），并给出 3-6 个中文标签。',
     '只输出 JSON，格式：{"summary":"...","tags":["标签1","标签2"]}',

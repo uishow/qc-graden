@@ -19,11 +19,10 @@
 - 基础数据 vs 测试数据边界：基础=knowledge_categories(8 类，含全屋定制) + knowledge_articles(scope='official' 4 篇种子，由 init 写入)；测试=projects 及 members/stages/rooms/diaries/expenses/materials + knowledge_articles(scope='member' 成员导入)。清测试用 clearTestData 云函数（只删测试、不碰基础）。
 
 ## 大模型（LLM）配置约定
-- `enrichArticle` 走 **OpenAI 兼容 HTTP**，配置全在云函数**环境变量**：`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`（默认 deepseek-chat）。密钥绝不进代码库/前端。
-- 地址会**自动补全** `/chat/completions`（填 `https://api.deepseek.com/v1` 或域名均可）。未配置或调用失败 → 降级为网页 meta 描述 + keywords，**不影响入库**；失败原因经 `aiError` 返回并在详情页弹窗提示。
-- 环境变量**按单个云函数配置**：`enrichArticle` 与自检用的 `llmPing` 需各配一遍；改完保存即生效，无需重部署代码。
+- **2026-10-09 起集中配置**：`app_settings` 集合（key='llm'，存 base_url/api_key/model）为唯一真源，「我的」页「AI 设置」弹窗（仅 owner/family 可见）经 `aiAdmin` 云函数读写，三个 AI 函数（enrichArticle/askAI/weeklyDigest）**共用一份，改一次全生效**；env 变量降级为兜底（集合没配时才用）。`app_settings` 安全规则 **read=false/write=false**（存密钥，客户端完全不可见），集合由 aiAdmin 首次保存时自动创建。API Key 不回显（只回尾 4 位），留空保存=不修改。
+- LLM 调用走 **OpenAI 兼容 HTTP**，地址自动补全 `/chat/completions`。未配置或调用失败 → 各函数独立降级（摘要：meta 抽取；问答：相关文章列表；周报：统计模板），**不影响主功能**；失败原因经 `aiError` 返回并在前端提示。
 - 云函数出口在国内：**OpenAI/Claude 直连不通、本机 Ollama/localhost 不可用**，须用国内服务（DeepSeek / 智谱GLM / 通义千问 / 混元 / Kimi / 硅基流动 / 火山方舟）。
-- 排查 AI 配置直接用详情页「补充内容与摘要」的 aiError 弹窗（信息最全）。曾短暂建过 `llmPing` 自检云函数，因需按函数重复配环境变量太繁琐，**用户要求已删除**（2026-10-08），不要再建议重建。
+- 排查 AI 配置直接用前端提示的 aiError（信息最全）。曾短暂建过 `llmPing` 自检云函数，因太繁琐**用户要求已删除**（2026-10-08），不要再建议重建。
 
 ## 云函数部署检查清单（新增/改动被前端 wx.cloud.callFunction 调用的函数时，逐条核对）
 1. **目录三件套**：每个云函数目录必须含 `index.js` + `package.json`(声明 `wx-server-sdk:latest`) + `config.json`({timeout,memorySize,installDependency:true})。**缺 package.json → DevTools 无法部署运行**（曾发生 confirmImaImport 只有 index.js、未部署，导致待确认区「确认/拒绝/一键全部导入」三按钮全无反应）。
