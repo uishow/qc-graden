@@ -7,9 +7,16 @@
 
   <!-- 知识库（已发布） -->
   <block wx:if="{{activeTab === 0}}">
-    <view class="row" style="gap:16rpx;margin-bottom:20rpx;align-items:center">
-      <view class="btn-outline sm" style="flex-shrink:0" bindtap="goChat">🤖 AI 问答</view>
-      <input class="input" style="flex:1;margin-bottom:0" placeholder="搜索：防水、预算、验收…" value="{{keyword}}" bindinput="onKeywordInput" />
+    <view class="kb-toolbar">
+      <view class="kb-search">
+        <text class="kb-search-icon">🔍</text>
+        <input class="kb-search-input" placeholder="搜索：防水、预算、验收…" placeholder-class="kb-search-ph" value="{{keyword}}" bindinput="onKeywordInput" />
+        <text wx:if="{{keyword}}" class="kb-search-clear" bindtap="clearKeyword">✕</text>
+      </view>
+      <view class="kb-ai-btn" bindtap="goChat">
+        <text class="kb-ai-icon">🤖</text>
+        <text class="kb-ai-text">AI</text>
+      </view>
     </view>
 
     <scroll-view scroll-x style="white-space:nowrap;margin-bottom:20rpx">

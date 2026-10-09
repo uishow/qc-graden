@@ -211,6 +211,11 @@ Page({
     this._t = setTimeout(() => this.search(), 300)
   },
 
+  clearKeyword() {
+    clearTimeout(this._t)
+    this.setData({ keyword: '' }, () => this.search())
+  },
+
   async search() {
     this.setData({ loading: true })
     const cat = this.data.categories[this.data.activeCategory]

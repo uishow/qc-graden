@@ -148,3 +148,66 @@
   font-size: 24rpx;
   flex-shrink: 0;
 }
+
+/* 顶部工具栏：胶囊搜索框 + AI 圆钮（风格与上方 tab 胶囊一致） */
+.kb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+.kb-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  background: var(--c-secondary-bg);
+  border-radius: 999rpx;
+  padding: 0 24rpx;
+  height: 72rpx;
+}
+.kb-search-icon {
+  font-size: 26rpx;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+.kb-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  font-size: 27rpx;
+  color: var(--c-text);
+}
+.kb-search-ph {
+  color: var(--c-text-2);
+}
+.kb-search-clear {
+  flex-shrink: 0;
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--c-text-2);
+  background: var(--c-card-border);
+  border-radius: 50%;
+}
+.kb-ai-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  height: 72rpx;
+  padding: 0 28rpx;
+  background: var(--c-primary);
+  border-radius: 999rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.12);
+}
+.kb-ai-icon {
+  font-size: 30rpx;
+}
+.kb-ai-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+}
