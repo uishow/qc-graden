@@ -10,6 +10,18 @@ const TYPES = ['labor', 'design', 'deposit', 'other']
 const TYPE_NAMES = { material: '材料', labor: '人工', design: '设计', other: '其他', deposit: '订金/定金' }
 const BELONG_NAMES = ['无归属', '全屋定制']
 
+// 文本交集：较短串的任意连续 2 字片段出现在另一串中即视为相似（中文无分词，滑窗够用）
+function textOverlap(a, b) {
+  const s = String(a || '').trim()
+  const t = String(b || '').trim()
+  if (s.length < 2 || t.length < 2) return false
+  const [shortStr, longStr] = s.length <= t.length ? [s, t] : [t, s]
+  for (let i = 0; i + 2 <= shortStr.length; i++) {
+    if (longStr.indexOf(shortStr.slice(i, i + 2)) !== -1) return true
+  }
+  return false
+}
+
 Page({
   data: {
     theme: 'theme-a',
@@ -121,6 +133,18 @@ Page({
     }
   },
 
+  // 保存前防重提示（C 兜底）：B 防重模型堵住了「手动录材料类花费」的入口，
+  // 但堵不住换类目重复录同一笔钱（如材料已计「已购买」，又把这笔钱录成人工费）。
+  // 金额与某材料完全一致且描述有交集时提醒，确认后仍可保存——只提示不拦截。
+  async findDupMaterial(fen, remark) {
+    const text = String(remark || '').trim()
+    if (!text || !fen || !this.projectId) return null
+    const { data } = await cloud.database
+      .from('materials').select('name,remark,total_price,status').eq('project_id', this.projectId)
+    const rows = data || []
+    return rows.find((m) => Number(m.total_price) === fen && textOverlap(text, (m.name || '') + ' ' + (m.remark || ''))) || null
+  },
+
   async onSave() {
     const { id, baseVersion, amount, typeIndex, belongIndex, stageIndex, payDate, remark } = this.data
     const fen = yuan2fen(amount)
@@ -129,6 +153,19 @@ Page({
       return
     }
     if (this.data.saving) return
+    const dupMat = await this.findDupMaterial(fen, remark)
+    if (dupMat) {
+      const statusName = dupMat.status === 'bought' ? '已购买' : dupMat.status === 'on_site' ? '已进场' : '待购买'
+      const { confirm } = await new Promise((resolve) =>
+        wx.showModal({
+          title: '可能重复计入',
+          content: `金额 ${fen2yuan(fen)} 元与材料「${dupMat.name || '未命名'}」（${statusName}）一致且描述相似，这笔钱可能已计入预算。仍要保存？`,
+          confirmText: '仍要保存',
+          success: (r) => resolve(r),
+        })
+      )
+      if (!confirm) return
+    }
     this.setData({ saving: true })
     try {
       const now = new Date().toISOString()
