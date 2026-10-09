@@ -1,0 +1,23 @@
+/* 房间管理：复用 app.wxss 的 .page-root / .card / .between / .row / .input / .btn-primary / .btn-outline */
+.hint {
+  font-size: 26rpx;
+  color: var(--c-text-2);
+  background: var(--c-secondary-bg);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 20rpx;
+  line-height: 1.6;
+}
+.sm {
+  font-size: 26rpx;
+  padding: 14rpx 24rpx;
+}
+.btn-danger {
+  background: transparent;
+  color: #C0392B;
+  border: 1rpx solid #C0392B;
+  border-radius: 16rpx;
+  font-size: 26rpx;
+  text-align: center;
+  padding: 14rpx 24rpx;
+}

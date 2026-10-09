@@ -1,0 +1,62 @@
+<view class="page-root {{theme}}" wx:if="{{article}}">
+  <view class="title-serif">{{article.title}}</view>
+  <view class="muted" style="margin:12rpx 0 24rpx">{{metaText}}</view>
+
+  <!-- 摘要：AI 自动生成或导入时填写（旧文章可能没有，则不显示） -->
+  <view wx:if="{{article.summary}}" class="summary-box">
+    <view class="summary-label">摘要</view>
+    <view class="summary-text">{{article.summary}}</view>
+  </view>
+
+  <!-- 链接类条目：直接显示原文链接 + 复制按钮（ima 链接类存 url，手动导入存 source_link） -->
+  <block wx:if="{{article.source_link || article.url}}">
+    <view class="link-line">{{article.source_link || article.url}}</view>
+    <view class="btn-outline" style="display:inline-block;margin-bottom:20rpx" bindtap="openSource">复制原文链接</view>
+  </block>
+
+  <view wx:if="{{article.scope === 'member'}}" class="btn-outline" style="display:inline-block;margin-bottom:20rpx;color:#C0392B;border-color:#C0392B" bindtap="onDelete">删除这篇文章</view>
+
+  <!-- 缺摘要/正文的老文章：可手动补充（抓网页正文 + AI 生成摘要标签） -->
+  <view wx:if="{{needsEnrich}}" class="btn-outline" style="display:inline-block;margin-bottom:20rpx" bindtap="enrichNow">{{enriching ? '处理中…' : '补充内容与摘要'}}</view>
+  <!-- ima 导入且带原文链接：重新抓取正文（用带格式的新解析覆盖现有正文） -->
+  <view wx:if="{{article.source === 'ima' && (article.source_link || article.url)}}" class="btn-outline" style="display:inline-block;margin-bottom:20rpx" bindtap="onRefetch">{{enriching ? '处理中…' : '重新抓取正文'}}</view>
+
+  <view style="display:flex;flex-wrap:wrap;gap:12rpx;margin-bottom:20rpx" wx:if="{{imageUrls.length}}">
+    <image wx:for="{{imageUrls}}" wx:key="*this" src="{{item}}" mode="aspectFill"
+      style="width:220rpx;height:220rpx;border-radius:12rpx"
+      bindtap="previewImage" data-url="{{item}}" />
+  </view>
+
+  <!-- 正文：仅当文章确实有内容时渲染，避免链接/图片类无正文文章出现空白卡片 -->
+  <view wx:if="{{article.content}}" class="card">
+    <block wx:for="{{lines}}" wx:key="index">
+      <view wx:if="{{item.kind === 'h2'}}" style="font-weight:600;font-size:32rpx;margin:20rpx 0 8rpx">{{item.text}}</view>
+      <view wx:elif="{{item.kind === 'li'}}" style="padding-left:20rpx;margin:6rpx 0">· <text wx:for="{{item.segs}}" wx:for-item="seg" wx:key="k"><text wx:if="{{seg.b}}" style="font-weight:600">{{seg.t}}</text><text wx:else>{{seg.t}}</text></text></view>
+      <view wx:elif="{{item.kind === 'quote'}}" class="muted" style="border-left:4rpx solid var(--c-accent);padding-left:16rpx;margin:12rpx 0"><text wx:for="{{item.segs}}" wx:for-item="seg" wx:key="k"><text wx:if="{{seg.b}}" style="font-weight:600">{{seg.t}}</text><text wx:else>{{seg.t}}</text></text></view>
+      <view wx:elif="{{item.kind === 'p'}}" style="margin:8rpx 0"><text wx:for="{{item.segs}}" wx:for-item="seg" wx:key="k"><text wx:if="{{seg.b}}" style="font-weight:600">{{seg.t}}</text><text wx:else>{{seg.t}}</text></text></view>
+      <image wx:elif="{{item.kind === 'img'}}" class="rich-img" src="{{item.text}}" mode="widthFix"
+        bindtap="previewImage" data-url="{{item.text}}" />
+      <view wx:else style="height:12rpx"></view>
+    </block>
+  </view>
+
+  <view style="margin-top:12rpx">
+    <text wx:for="{{article.tags}}" wx:key="*this" class="tag">{{item}}</text>
+  </view>
+
+  <view style="font-weight:600;margin:32rpx 0 12rpx">评论（{{comments.length}}）</view>
+  <view wx:if="{{comments.length === 0}}" class="card muted">还没有评论，来说两句</view>
+  <view wx:for="{{comments}}" wx:key="id" class="card">
+    <view class="between">
+      <view style="font-weight:600">{{item.author}}</view>
+      <view class="muted">{{item.time}}</view>
+    </view>
+    <view style="margin-top:8rpx">{{item.content}}</view>
+  </view>
+
+  <view class="row" style="gap:16rpx;margin-top:20rpx">
+    <input class="input" style="flex:1;margin-bottom:0" placeholder="写下你的看法…"
+      value="{{commentInput}}" bindinput="onCommentInput" />
+    <view class="btn-primary" style="padding:20rpx 32rpx" bindtap="sendComment">{{sending ? '…' : '发送'}}</view>
+  </view>
+</view>

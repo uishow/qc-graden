@@ -1,0 +1,27 @@
+{
+  "only_missing": true,
+  "overrides": {
+    "ima-import-IMG_20261006_181713": {
+      "url": "https://skb.ima.myqcloud.com/5/czkYBe4B8LSnNdVe0a0awH/file_manager/01a1146673ac793ba39801d1c9a13590.jpg?media_id=img_eea5346ce9653a9e565120e24049400a_deb0db4209a641675ecc52da735cb05b7513054036102547&media_title=IMG_20261006_181713.jpg&sign=ca3b7dc0dbfc3acae3e008c8c050bf3d5c312013&t=6ac73930",
+      "headers": {
+        "X-IMA-Create-URL-Time": "1791439400",
+        "X-IMA-Platform": "H5",
+        "X-IMA-Resource-Category": "",
+        "X-IMA-Sign": "250260ab5e1e179d57fe9b0dea12f8a69a003ccf099079f21144d3ce3c8af50f",
+        "X-IMA-Trace-ID": "61bb4b408ba469bb8baee665e93e0294",
+        "X-IMA-UID-SHA256": "2b5f610c0b4d90320e57d8b2212d5cfc1978f01b430e604632db7a392ba221af"
+      }
+    },
+    "ima-import-IMG_20261006_135500": {
+      "url": "https://skb.ima.myqcloud.com/5/czkYBe4B8LSnNdVe0a0awH/file_manager/01a114765f0277378befaa7610f9b4df.jpg?media_id=img_89903d1a1cf7e5fbcfd2396f8a45193d_b3ce01539979662207f23c9a44d8b1f87513054036102547&media_title=IMG_20261006_135500.jpg&sign=6e119427f114877e8c0b4c16aee1dd686b48e355&t=6ac73931",
+      "headers": {
+        "X-IMA-Create-URL-Time": "1791439401",
+        "X-IMA-Platform": "H5",
+        "X-IMA-Resource-Category": "",
+        "X-IMA-Sign": "4326c46f0ba618efb4cd63dc8ae94345e66bab008f071f9c4bdb3fbb7c988a81",
+        "X-IMA-Trace-ID": "5eb85b26b962de46d12c9be144e3ab13",
+        "X-IMA-UID-SHA256": "2b5f610c0b4d90320e57d8b2212d5cfc1978f01b430e604632db7a392ba221af"
+      }
+    }
+  }
+}

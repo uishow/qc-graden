@@ -1,0 +1,339 @@
+const { cloud } = require('../../utils/cloud')
+const store = require('../../utils/store')
+const { fen2yuan } = require('../../utils/format')
+const { BELONG_WHOLEHOUSE, isWholeHouseLike, isWholeHouseStage } = require('../../utils/wholehouse')
+const { exportExpensesTabCsv, exportMaterialsTabCsv, exportWholeHouseTabCsv } = require('../../utils/exportCsv')
+
+const app = getApp()
+
+const TYPE_NAMES = { material: '材料', labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }
+const MAT_STATUS = [
+  { key: 'to_buy', name: '待购买' },
+  { key: 'bought', name: '已购买' },
+  { key: 'on_site', name: '已进场' },
+]
+const STAGE_STATUS_NAMES = { pending: '未开始', doing: '进行中', done: '已完成' }
+
+Page({
+  data: {
+    theme: 'theme-a',
+    empty: false,
+    activeTab: 0, // 0=费用总览 / 1=材料清单 / 2=花费清单 / 3=全屋定制
+    // 花费
+    budgetText: '¥0.00',
+    spentText: '¥0.00',
+    remainText: '¥0.00',
+    spentPercent: 0,
+    typeSums: [],
+    recent: [],
+    // 材料清单
+    matEmpty: true,
+    matTotalText: '¥0.00',
+    matGroups: [],
+    // 全屋定制（阶段进度卡 + 归集）
+    wholeHouse: { has: false, name: '', status: '', statusName: '', id: '' },
+    whMatTotalText: '¥0.00',
+    whExpTotalText: '¥0.00',
+    whTotalText: '¥0.00',
+    whItems: [],
+    whSuggestCount: 0,
+  },
+
+  onLoad() {},
+
+  // 导出：每个 Tab 只导当前页数据（花费清单=花费 / 材料清单=材料 / 全屋定制=归属全屋定制的项）
+  goExport() {
+    exportExpensesTabCsv(cloud, store.getCurrentProjectId())
+  },
+  goExportMaterials() {
+    exportMaterialsTabCsv(cloud, store.getCurrentProjectId())
+  },
+  goExportWholeHouse() {
+    exportWholeHouseTabCsv(cloud, store.getCurrentProjectId())
+  },
+
+  // 切换「费用总览 / 材料清单 / 花费清单 / 全屋定制」四个 tab（参考知识库分块方式）
+  switchTab(e) {
+    const tab = Number(e.currentTarget.dataset.tab)
+    if (tab === this.data.activeTab) return
+    this.setData({ activeTab: tab })
+  },
+
+  async onShow() {
+    store.applyTheme(this)
+    store.applyTabBar(this, 2)
+    const session = await app.ready()
+    if (!session) return
+    await this.load()
+  },
+
+  async load() {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) {
+      this.setData({ empty: true })
+      return
+    }
+    const [{ data: projects }, { data: expenses }, { data: materials }, { data: stages }] = await Promise.all([
+      cloud.database.from('projects').select('budget').eq('id', projectId).limit(1),
+      cloud.database.from('expenses').select('*').eq('project_id', projectId)
+        .neq('deleted', true).order('pay_date', { ascending: false }).limit(100),
+      cloud.database.from('materials').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
+      cloud.database.from('stages').select('*').eq('project_id', projectId),
+    ])
+
+    // 花费：expenses 表（非材料类目）+ 材料合计，均计入预算（B 防重模型：
+    // 材料不手填，统一由材料清单汇总，结构上杜绝重复）
+    const budget = projects && projects[0] ? Number(projects[0].budget || 0) : 0
+    const list = expenses || []
+    const mat = materials || []
+    // 已花费口径（与首页统一）：非材料手动花费 + 已购买/已进场材料；待购买(to_buy)不计入——推进后数字才会变化
+    const purchasedMat = mat.filter((m) => m.status === 'bought' || m.status === 'on_site')
+    const matTotal = purchasedMat.reduce((s, m) => s + Number(m.total_price || 0), 0)
+    const spent = list
+      .filter((e) => e.type !== 'material')
+      .reduce((s, e) => s + Number(e.amount || 0), 0) + matTotal
+    const sums = {}
+    list.forEach((e) => { sums[e.type] = (sums[e.type] || 0) + Number(e.amount || 0) })
+
+    // 材料：清单（按状态分组），金额已并回预算
+    const matGroups = MAT_STATUS
+      .filter((s) => mat.some((m) => m.status === s.key))
+      .map((s) => ({
+        ...s,
+        items: mat
+          .filter((m) => m.status === s.key)
+          .map((m) => ({ ...m, totalText: fen2yuan(m.total_price), attCount: (m.attachments || []).length })),
+      }))
+
+    // 全屋定制：并行环节，不再是线性固定阶段。支持用户在看板建多个全屋定制子阶段
+    //（橱柜/衣柜/窗帘安装…），按 key='customhome' 或名称含「全屋定制」/「定制」匹配，列出全部。
+    const whMatch = (stages || []).filter(isWholeHouseStage)
+    const whStages = whMatch.map((s) => ({
+      id: s.id,
+      name: s.name,
+      statusName: STAGE_STATUS_NAMES[s.status] || '未开始',
+    }))
+    const wholeHouse = whMatch.length
+      ? { has: true, count: whMatch.length, name: whMatch[0].name, statusName: STAGE_STATUS_NAMES[whMatch[0].status] || '未开始', id: whMatch[0].id }
+      : { has: false, count: 0, name: '全屋定制', statusName: '', id: '' }
+
+    // 全屋定制归集：只认 belong === 'wholehouse' 的材料 / 花费（花费排除历史材料类，避免与材料清单重复）
+    const whMat = mat.filter((m) => m.belong === BELONG_WHOLEHOUSE)
+    const whExp = list.filter((e) => e.belong === BELONG_WHOLEHOUSE && e.type !== 'material')
+    const whMatTotal = whMat.reduce((s, m) => s + Number(m.total_price || 0), 0)
+    const whExpTotal = whExp.reduce((s, e) => s + Number(e.amount || 0), 0)
+    const whItems = [
+      ...whMat.map((m) => ({
+        k: 'm' + m.id, kind: 'material', id: m.id, kindName: '材料',
+        title: m.name, sub: m.sub || '全屋定制', text: fen2yuan(m.total_price),
+        attCount: (m.attachments || []).length,
+      })),
+      ...whExp.map((e) => ({
+        k: 'e' + e.id, kind: 'expense', id: e.id, kindName: TYPE_NAMES[e.type] || '其他',
+        title: e.remark || '花费', sub: e.pay_date, text: fen2yuan(e.amount),
+        attCount: (e.attachments || []).length,
+      })),
+    ]
+    // 关键词兑底：统计「疑似属于全屋定制但尚未标记」的项，供一键归集
+    const whSuggestCount =
+      mat.filter((m) => m.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike((m.name || '') + ' ' + (m.remark || ''))).length +
+      list.filter((e) => e.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike(e.remark || '')).length
+
+    // 费用总览·按阶段维度（轻量关联：只认带 stage_id 的；未带归入「通用」；花费排除历史材料类；
+    // 材料只计已购部分，与已花费口径一致）
+    const expByStage = {}
+    const matByStage = {}
+    list.forEach((e) => { if (e.stage_id && e.type !== 'material') expByStage[e.stage_id] = (expByStage[e.stage_id] || 0) + Number(e.amount || 0) })
+    purchasedMat.forEach((m) => { if (m.stage_id) matByStage[m.stage_id] = (matByStage[m.stage_id] || 0) + Number(m.total_price || 0) })
+    const stageRollups = (stages || [])
+      .map((s) => ({ id: s.id, name: s.name, exp: expByStage[s.id] || 0, mat: matByStage[s.id] || 0 }))
+      .filter((r) => r.exp > 0 || r.mat > 0)
+      .map((r) => ({ name: r.name, expText: fen2yuan(r.exp), matText: fen2yuan(r.mat) }))
+    const untaggedExp = list.reduce((s, e) => s + (e.stage_id ? 0 : Number(e.amount || 0)), 0)
+    const untaggedMat = mat.reduce((s, m) => s + (m.stage_id ? 0 : Number(m.total_price || 0)), 0)
+    if (untaggedExp > 0 || untaggedMat > 0) {
+      stageRollups.push({ name: '通用（未归类）', expText: fen2yuan(untaggedExp), matText: fen2yuan(untaggedMat) })
+    }
+
+    // 费用总览·按材料类型维度（只计已购材料，与已花费口径一致）
+    const MAT_CATS = ['主材', '辅材', '家具', '家电', '软装']
+    const matTypeTotals = MAT_CATS
+      .map((c) => ({ name: c, total: purchasedMat.filter((m) => m.category === c).reduce((s, m) => s + Number(m.total_price || 0), 0) }))
+      .filter((x) => x.total > 0)
+      .map((x) => ({ name: x.name, text: fen2yuan(x.total) }))
+    const matPendingTotal = Math.max(0, mat.reduce((s, m) => s + Number(m.total_price || 0), 0) - matTotal)
+
+    this.setData({
+      empty: false,
+      budgetText: fen2yuan(budget),
+      spentText: fen2yuan(spent),
+      remainText: fen2yuan(budget - spent),
+      spentPercent: budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0,
+      // 按花费类目：仅人工/设计/其他/订金·定金（材料由材料清单汇总，不再单列，杜绝重复）
+      typeSums: ['labor', 'design', 'deposit', 'other']
+        .filter((t) => sums[t])
+        .map((t) => ({ name: TYPE_NAMES[t], text: fen2yuan(sums[t]) })),
+      recent: list.map((e) => ({
+        ...e,
+        typeName: TYPE_NAMES[e.type] || '其他',
+        amountText: fen2yuan(e.amount),
+        attCount: (e.attachments || []).length,
+      })),
+      matEmpty: mat.length === 0,
+      matTotalText: fen2yuan(mat.reduce((s, m) => s + Number(m.total_price || 0), 0)),
+      matPurchasedText: fen2yuan(matTotal),
+      matPendingText: fen2yuan(matPendingTotal),
+      matGroups,
+      wholeHouse,
+      whMatTotalText: fen2yuan(whMatTotal),
+      whExpTotalText: fen2yuan(whExpTotal),
+      whTotalText: fen2yuan(whMatTotal + whExpTotal),
+      whItems,
+      whSuggestCount,
+      stageRollups,
+      matTypeTotals,
+    })
+  },
+
+  // 花费
+  goEdit() {
+    wx.navigateTo({ url: '/pages/budget/edit' })
+  },
+  goEditItem(e) {
+    wx.navigateTo({ url: `/pages/budget/edit?id=${e.currentTarget.dataset.id}` })
+  },
+  async removeItem(e) {
+    const id = e.currentTarget.dataset.id
+    const { confirm } = await new Promise((resolve) =>
+      wx.showModal({
+        title: '删除这笔花费',
+        content: '确定删除这条花费记录？（删除后不再计入汇总）',
+        confirmText: '删除',
+        success: (r) => resolve(r),
+      })
+    )
+    if (!confirm) return
+    // 软删除：与日记一致，置 deleted:true，列表查询已过滤
+    const { error } = await cloud.database
+      .from('expenses').update({ deleted: true, updated_at: new Date().toISOString() })
+      .eq('id', id).select()
+    if (error) {
+      wx.showToast({ title: '删除失败', icon: 'none' })
+      return
+    }
+    await this.load()
+  },
+
+  // 材料清单
+  goAddMaterial() {
+    if (!store.getCurrentProjectId()) {
+      wx.showToast({ title: '请先在首页创建或选择项目', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: '/pages/material/edit' })
+  },
+  goEditMaterial(e) {
+    wx.navigateTo({ url: `/pages/material/edit?id=${e.currentTarget.dataset.id}` })
+  },
+  async removeMaterial(e) {
+    const id = e.currentTarget.dataset.id
+    const { confirm } = await new Promise((resolve) =>
+      wx.showModal({
+        title: '删除材料',
+        content: '确定从清单中删除这项材料？',
+        confirmText: '删除',
+        success: (r) => resolve(r),
+      })
+    )
+    if (!confirm) return
+    const { error } = await cloud.database.from('materials').remove().eq('id', id).select()
+    if (error) {
+      wx.showToast({ title: '删除失败', icon: 'none' })
+      return
+    }
+    await this.load()
+  },
+  async advanceMaterialStatus(e) {
+    const id = e.currentTarget.dataset.id
+    const cur = e.currentTarget.dataset.status
+    const order = ['to_buy', 'bought', 'on_site']
+    const next = order[Math.min(order.indexOf(cur) + 1, order.length - 1)]
+    if (next === cur) return
+    const { error } = await cloud.database
+      .from('materials')
+      .update({ status: next, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+    if (error) {
+      wx.showToast({ title: '更新失败', icon: 'none' })
+      return
+    }
+    await this.load()
+    // 注意：材料是独立表，不回写 expenses；预算已花费 = 花费合计 + 材料合计（按用户确认「所有花的钱都计入预算」）
+  },
+
+  // 全屋定制：阶段进度卡，点一下跳阶段看板查看/推进（带 scope=wholehouse 只显示全屋定制阶段）
+  goWholeHouse() {
+    wx.navigateTo({ url: '/pages/stage/board?scope=wholehouse' })
+  },
+
+  // 归集入口：加/改全屋定制的材料与花费（保存时自动带归属）
+  goAddWhMaterial() {
+    if (!store.getCurrentProjectId()) {
+      wx.showToast({ title: '请先在首页创建或选择项目', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/material/edit?belong=${BELONG_WHOLEHOUSE}` })
+  },
+  goAddWhExpense() {
+    if (!store.getCurrentProjectId()) {
+      wx.showToast({ title: '请先在首页创建或选择项目', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: `/pages/budget/edit?belong=${BELONG_WHOLEHOUSE}` })
+  },
+  goEditWhItem(e) {
+    const { kind, id } = e.currentTarget.dataset
+    if (kind === 'material') wx.navigateTo({ url: `/pages/material/edit?id=${id}` })
+    else wx.navigateTo({ url: `/pages/budget/edit?id=${id}` })
+  },
+  // 关键词兑底：把名称/备注含全屋定制关键词的材料/花费批量标记为全屋定制
+  async autoTagWholeHouse() {
+    const pid = store.getCurrentProjectId()
+    if (!pid) return
+    const [{ data: mats }, { data: exps }] = await Promise.all([
+      cloud.database.from('materials').select('id,name,remark,belong').eq('project_id', pid),
+      cloud.database.from('expenses').select('id,remark,belong').eq('project_id', pid).neq('deleted', true),
+    ])
+    const matHit = (mats || []).filter((m) => m.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike((m.name || '') + ' ' + (m.remark || '')))
+    const expHit = (exps || []).filter((x) => x.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike(x.remark || ''))
+    const total = matHit.length + expHit.length
+    if (!total) {
+      wx.showToast({ title: '没有可归集的疑似项', icon: 'none' })
+      return
+    }
+    const { confirm } = await new Promise((resolve) =>
+      wx.showModal({
+        title: '一键归集',
+        content: `将把名称/备注含全屋定制关键词的 ${matHit.length} 项材料、${expHit.length} 笔花费标记为「全屋定制」，确定？`,
+        confirmText: '归集',
+        success: (r) => resolve(r),
+      })
+    )
+    if (!confirm) return
+    wx.showLoading({ title: '归集中…' })
+    try {
+      const now = new Date().toISOString()
+      await Promise.all([
+        ...matHit.map((m) => cloud.database.from('materials').update({ belong: BELONG_WHOLEHOUSE, updated_at: now }).eq('id', m.id)),
+        ...expHit.map((x) => cloud.database.from('expenses').update({ belong: BELONG_WHOLEHOUSE, updated_at: now }).eq('id', x.id)),
+      ])
+      wx.hideLoading()
+      wx.showToast({ title: `已归集 ${total} 项` })
+      await this.load()
+    } catch (err) {
+      wx.hideLoading()
+      wx.showToast({ title: '归集失败，请重试', icon: 'none' })
+    }
+  },
+})

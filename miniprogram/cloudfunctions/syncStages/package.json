@@ -1,0 +1,9 @@
+{
+  "name": "syncStages",
+  "version": "1.0.0",
+  "description": "把 10 个标准施工阶段同步到指定项目",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

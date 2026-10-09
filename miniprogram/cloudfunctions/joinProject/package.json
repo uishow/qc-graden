@@ -1,0 +1,9 @@
+{
+  "name": "joinProject",
+  "version": "1.0.0",
+  "description": "邀请码加入项目（管理员上下文）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

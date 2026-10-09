@@ -1,0 +1,22 @@
+/* 主题令牌来自 app.wxss */
+
+/* 常用户型快捷选项胶囊 */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin: -6rpx 0 12rpx;
+}
+.chip {
+  font-size: 24rpx;
+  color: var(--c-secondary);
+  background: var(--c-secondary-bg);
+  border: 1rpx solid transparent;
+  border-radius: 999rpx;
+  padding: 8rpx 22rpx;
+}
+.chip-on {
+  color: #ffffff;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}

@@ -1,0 +1,9 @@
+{
+  "name": "projectAdmin",
+  "version": "1.0.0",
+  "description": "项目管理：重置邀请码 / 移除成员 / 退出 / 删除项目（管理员上下文）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

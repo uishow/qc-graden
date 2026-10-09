@@ -1,0 +1,9 @@
+{
+  "name": "enrichArticle",
+  "version": "1.0.0",
+  "description": "确认导入后自动生成摘要+标签（调大模型，未配密钥则降级网页描述抽取），完成才发布入知识库",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

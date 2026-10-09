@@ -1,0 +1,40 @@
+/* 主题令牌来自 app.wxss */
+
+/* 正文内联图片（抓取自网页，转存云存储后按原位置渲染） */
+.rich-img {
+  width: 100%;
+  border-radius: 12rpx;
+  margin: 12rpx 0;
+  display: block;
+}
+
+/* 摘要块（AI 自动生成/导入填写） */
+.summary-box {
+  background: var(--c-secondary-bg);
+  border-radius: 16rpx;
+  padding: 18rpx 20rpx;
+  margin-bottom: 24rpx;
+}
+.summary-label {
+  font-size: 22rpx;
+  color: var(--c-secondary);
+  font-weight: 600;
+  margin-bottom: 6rpx;
+}
+.summary-text {
+  font-size: 28rpx;
+  color: var(--c-text);
+  line-height: 1.65;
+}
+
+/* 链接类条目：显示原文链接（可换行，避免长链接截断） */
+.link-line {
+  font-size: 22rpx;
+  color: var(--c-accent);
+  background: var(--c-secondary-bg);
+  border-radius: 12rpx;
+  padding: 12rpx 16rpx;
+  margin-bottom: 12rpx;
+  word-break: break-all;
+  line-height: 1.5;
+}

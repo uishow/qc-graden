@@ -1,0 +1,78 @@
+<view class="page-root {{theme}}">
+  <view class="field-label">材料名称 *</view>
+  <input class="input" placeholder="如：柔光砖 750x1500" value="{{name}}" data-field="name" bindinput="onInput" />
+
+  <view class="row" style="gap:20rpx">
+    <view style="flex:1">
+      <view class="field-label">分类</view>
+      <picker range="{{categories}}" value="{{categoryIndex}}" bindchange="onCategoryChange">
+        <view class="input">{{categories[categoryIndex]}}</view>
+      </picker>
+    </view>
+    <view style="flex:1">
+      <view class="field-label">状态</view>
+      <picker range="{{statusNames}}" value="{{statusIndex}}" bindchange="onStatusChange">
+        <view class="input">{{statusNames[statusIndex]}}</view>
+      </picker>
+    </view>
+  </view>
+
+  <view class="field-label">归属</view>
+  <picker range="{{belongNames}}" value="{{belongIndex}}" bindchange="onBelongChange">
+    <view class="input">{{belongNames[belongIndex]}}</view>
+  </picker>
+  <block wx:if="{{belongIndex === 1}}">
+    <view class="field-label">全屋定制子类</view>
+    <picker range="{{subNames}}" value="{{subIndex}}" bindchange="onSubChange">
+      <view class="input">{{subNames[subIndex]}}</view>
+    </picker>
+  </block>
+
+  <view class="field-label">所属阶段（可选）</view>
+  <picker range="{{stageNames}}" value="{{stageIndex}}" bindchange="onStageChange">
+    <view class="input">{{stageNames[stageIndex]}}</view>
+  </picker>
+
+  <view class="row" style="gap:20rpx">
+    <view style="flex:1">
+      <view class="field-label">品牌</view>
+      <input class="input" placeholder="如：马可波罗" value="{{brand}}" data-field="brand" bindinput="onInput" />
+    </view>
+    <view style="flex:1">
+      <view class="field-label">规格</view>
+      <input class="input" placeholder="如：750x1500mm" value="{{spec}}" data-field="spec" bindinput="onInput" />
+    </view>
+  </view>
+
+  <view class="row" style="gap:20rpx">
+    <view style="flex:1">
+      <view class="field-label">数量</view>
+      <input class="input" type="digit" value="{{quantity}}" data-field="quantity" bindinput="onInput" />
+    </view>
+    <view style="flex:1">
+      <view class="field-label">单位</view>
+      <input class="input" placeholder="片 / ㎡ / 个" value="{{unit}}" data-field="unit" bindinput="onInput" />
+    </view>
+  </view>
+
+  <view class="field-label">单价（元）</view>
+  <input class="input" type="digit" placeholder="0.00" value="{{unitPrice}}" data-field="unitPrice" bindinput="onInput" />
+
+  <view class="field-label">备注</view>
+  <input class="input" placeholder="如：客厅通铺，含损耗" value="{{remark}}" data-field="remark" bindinput="onInput" />
+
+  <view class="field-label">附件凭证（报价单 / 收据 / 截图 / 文件，最多 9 个）</view>
+  <view class="att-grid">
+    <view wx:for="{{attachments}}" wx:key="fileID" class="att-item">
+      <image wx:if="{{item.kind === 'image'}}" class="att-thumb" src="{{item.fileID}}" mode="aspectFill"
+        data-index="{{index}}" bindtap="previewAttachment" />
+      <view wx:else class="att-file" data-index="{{index}}" bindtap="previewAttachment">
+        <view class="att-file-name">{{item.name}}</view>
+      </view>
+      <view class="att-del" data-index="{{index}}" catchtap="removeAttachment">×</view>
+    </view>
+    <view wx:if="{{attachments.length < 9}}" class="att-add" bindtap="addAttachment">＋ 添加</view>
+  </view>
+
+  <view class="btn-primary" style="margin-top:32rpx" bindtap="onSave">{{saving ? '保存中…' : '保存'}}</view>
+</view>

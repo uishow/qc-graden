@@ -1,0 +1,7 @@
+<view wx:if="{{!hidden}}" class="bar {{theme}}">
+  <view wx:for="{{list}}" wx:key="pagePath"
+    class="item {{selected === index ? 'on' : ''}}"
+    data-path="{{item.pagePath}}" bindtap="switchTab">
+    <view class="pill">{{item.text}}</view>
+  </view>
+</view>

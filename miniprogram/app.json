@@ -1,0 +1,40 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/diary/list",
+    "pages/budget/overview",
+    "pages/knowledge/index",
+    "pages/user/profile",
+    "pages/project/create",
+    "pages/diary/detail",
+    "pages/diary/edit",
+    "pages/budget/edit",
+    "pages/material/edit",
+    "pages/knowledge/detail",
+    "pages/knowledge/import",
+    "pages/stage/board",
+    "pages/room/manage"
+  ],
+  "window": {
+    "backgroundColor": "#FAF6EF",
+    "navigationBarBackgroundColor": "#FAF6EF",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "装修日记本"
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#8A7E72",
+    "selectedColor": "#8C5A3B",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页" },
+      { "pagePath": "pages/diary/list", "text": "日记" },
+      { "pagePath": "pages/budget/overview", "text": "花费" },
+      { "pagePath": "pages/knowledge/index", "text": "知识库" },
+      { "pagePath": "pages/user/profile", "text": "我的" }
+    ]
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

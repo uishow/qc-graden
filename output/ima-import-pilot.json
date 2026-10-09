@@ -1,0 +1,45 @@
+{
+  "_meta": {
+    "source": "ima 共享知识库「装修小常识」",
+    "ima_kb_id": "IOG192gnLHFssO7bJpBdF3804CH1QoimpI4EBxC92WY=",
+    "scope": "仅导入装修相关素材；ime 网页（小红书茶类禁忌、头条搞笑视频）按手动选择原则已排除",
+    "generated_at": "2026-10-08",
+    "caveat": "image_paths 当前为 ima 签名 URL（含 sign/t 参数，会过期）。生产环境建议把图片转存到小程序自有云存储后再写 image_paths，避免热链失效。"
+  },
+  "articles": [
+    {
+      "scope": "member",
+      "category_key": "material",
+      "title": "装修实拍 · 2026-10-06",
+      "summary": "来自 ima 共享知识库「装修小常识」的装修现场照片（根目录 IMG_20261006_181713.jpg）。",
+      "content": "由「导入 ima 共享库」从 ima 共享知识库「装修小常识」导入。原始素材：IMG_20261006_181713.jpg。",
+      "tags": ["装修", "实拍", "ima"],
+      "image_paths": [
+        "https://skb.ima.myqcloud.com/5/czkYBe4B8LSnNdVe0a0awH/file_manager/01a1146673ac793ba39801d1c9a13590.jpg?media_id=img_eea5346ce9653a9e565120e24049400a_deb0db4209a641675ecc52da735cb05b7513054036102547&media_title=IMG_20261006_181713.jpg&sign=34feedbd0ae28eff05cb597a92035f62af2f5713&t=6ac71691"
+      ],
+      "link_hash": "ima-import-IMG_20261006_181713",
+      "view_count": 0,
+      "status": "published",
+      "source": "ima",
+      "ima_kb_id": "IOG192gnLHFssO7bJpBdF3804CH1QoimpI4EBxC92WY=",
+      "ima_media_id": "img_eea5346ce9653a9e565120e24049400a_deb0db4209a641675ecc52da735cb05b7513054036102547"
+    },
+    {
+      "scope": "member",
+      "category_key": "material",
+      "title": "装修原始资料 · 2026-10-06",
+      "summary": "来自 ima 共享知识库「装修小常识 · 原始资料」文件夹的现场照片（IMG_20261006_135500.jpg）。",
+      "content": "由「导入 ima 共享库」从 ima 共享知识库「装修小常识 · 原始资料」文件夹导入。原始素材：IMG_20261006_135500.jpg。",
+      "tags": ["装修", "原始资料", "ima"],
+      "image_paths": [
+        "https://skb.ima.myqcloud.com/5/czkYBe4B8LSnNdVe0a0awH/file_manager/01a114765f0277378befaa7610f9b4df.jpg?media_id=img_89903d1a1cf7e5fbcfd2396f8a45193d_b3ce01539979662207f23c9a44d8b1f87513054036102547&media_title=IMG_20261006_135500.jpg&sign=f6893148c8314d068b1f86d78000da7e3073f2b6&t=6ac718a3"
+      ],
+      "link_hash": "ima-import-IMG_20261006_135500",
+      "view_count": 0,
+      "status": "published",
+      "source": "ima",
+      "ima_kb_id": "IOG192gnLHFssO7bJpBdF3804CH1QoimpI4EBxC92WY=",
+      "ima_media_id": "img_89903d1a1cf7e5fbcfd2396f8a45193d_b3ce01539979662207f23c9a44d8b1f87513054036102547"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+<view class="page-root {{theme}}">
+  <!-- Tab 切换：知识库（已发布） / 待确认导入 -->
+  <view class="tabs">
+    <view class="tab {{activeTab === 0 ? 'tab-on' : ''}}" data-tab="0" bindtap="switchTab">知识库</view>
+    <view class="tab {{activeTab === 1 ? 'tab-on' : ''}}" data-tab="1" bindtap="switchTab">待确认导入{{pendingList.length ? '(' + pendingList.length + ')' : ''}}</view>
+  </view>
+
+  <!-- 知识库（已发布） -->
+  <block wx:if="{{activeTab === 0}}">
+    <input class="input" placeholder="搜索：防水、预算、验收…" value="{{keyword}}" bindinput="onKeywordInput" />
+
+    <scroll-view scroll-x style="white-space:nowrap;margin-bottom:20rpx">
+      <view wx:for="{{categories}}" wx:key="id"
+        class="tag {{index === activeCategory ? 'tag-accent' : ''}}"
+        style="padding:10rpx 28rpx;font-size:26rpx"
+        data-index="{{index}}" bindtap="onCategoryTap">{{item.name}}</view>
+    </scroll-view>
+
+    <view wx:if="{{articles.length === 0 && !loading}}" class="empty">{{emptyHint || '没有匹配的文章'}}    </view>
+
+    <view wx:for="{{articles}}" wx:key="id" class="card" bindtap="goDetail" data-id="{{item.id}}">
+      <view class="between">
+        <view style="font-weight:600;flex:1">{{item.title}}</view>
+        <view wx:if="{{item.scope === 'member'}}" class="tag tag-accent">成员导入</view>
+      </view>
+      <view class="muted" style="margin-top:6rpx">{{item.summary}}</view>
+      <view style="margin-top:10rpx">
+        <text wx:for="{{item.tags}}" wx:key="*this" class="tag">{{item}}</text>
+        <text class="muted" style="float:right">阅读 {{item.view_count}}</text>
+      </view>
+    </view>
+  </block>
+
+  <!-- 待确认导入：ima 同步进来、等待人工放行的条目 -->
+  <block wx:if="{{activeTab === 1}}">
+    <view class="sync-bar">
+      <view class="muted sync-hint">ima 更新后点此拉取（不会自动同步）</view>
+      <view style="display:flex;gap:12rpx">
+        <view class="btn btn-outline btn-sm" bindtap="goImport">＋ 导入链接</view>
+        <view class="btn btn-outline btn-sm" bindtap="syncIma">{{syncing ? '同步中…' : '同步 ima'}}</view>
+      </view>
+    </view>
+    <view wx:if="{{pendingList.length === 0}}" class="empty">暂无待确认导入的条目</view>
+    <block wx:else>
+      <view class="pending-head">
+        <view class="pending-title">待确认导入（{{pendingList.length}}）</view>
+        <view class="btn btn-confirm btn-sm" bindtap="confirmAll">一键全部导入</view>
+      </view>
+      <view wx:for="{{pendingList}}" wx:key="id" class="pending-card">
+        <image wx:if="{{item.image_paths.length > 0}}" class="pending-thumb" src="{{item.image_paths[0]}}" mode="aspectFill" data-url="{{item.image_paths[0]}}" bindtap="previewImage" />
+        <view wx:else class="pending-thumb pending-thumb-empty">{{item.url ? '链' : '文'}}</view>
+        <view class="pending-body">
+          <view class="pending-name">{{item.title}}</view>
+          <view wx:if="{{item.url}}" class="pending-link" data-url="{{item.url}}" bindtap="copyLink">🔗 {{item.url}}</view>
+          <view class="muted pending-summary">{{item.summary || '（无摘要；链接类请点上方链接复制后到浏览器查看内容）'}}</view>
+          <view wx:if="{{item.error_note}}" class="pending-error">{{item.error_note}}</view>
+          <view wx:if="{{item.status === 'processing'}}" class="pending-status">AI 处理中…（若无反应可点「确认导入」重试）</view>
+          <view wx:if="{{item.tags.length > 0}}" class="pending-tags">
+            <text wx:for="{{item.tags}}" wx:for-item="t" wx:key="*this" class="tag">{{t}}</text>
+          </view>
+          <view class="pending-actions">
+            <view wx:if="{{item.error_note}}" class="btn btn-reject" data-id="{{item.id}}" bindtap="retryEnrich">重试生成</view>
+            <view class="btn btn-confirm" data-id="{{item.id}}" bindtap="confirm">确认导入</view>
+            <view class="btn btn-reject" data-id="{{item.id}}" bindtap="reject">拒绝</view>
+          </view>
+        </view>
+      </view>
+    </block>
+  </block>
+</view>

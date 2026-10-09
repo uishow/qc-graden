@@ -1,0 +1,9 @@
+{
+  "name": "importImaKb",
+  "version": "1.0.0",
+  "description": "一次性导入 ima 共享知识库条目到 knowledge_articles（管理员上下文，绕过安全规则）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

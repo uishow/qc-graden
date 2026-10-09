@@ -1,0 +1,43 @@
+<view class="page-root {{theme}}">
+  <view class="field-label">金额（元）*</view>
+  <input class="input" type="digit" placeholder="0.00" value="{{amount}}" data-field="amount" bindinput="onInput" />
+
+  <view class="field-label">类型</view>
+  <picker range="{{typeNames}}" value="{{typeIndex}}" bindchange="onTypeChange">
+    <view class="input">{{typeNames[typeIndex]}}</view>
+  </picker>
+  <view class="field-hint">材料支出请在「材料清单」登记，会自动计入预算，避免重复记账</view>
+
+  <view class="field-label">归属</view>
+  <picker range="{{belongNames}}" value="{{belongIndex}}" bindchange="onBelongChange">
+    <view class="input">{{belongNames[belongIndex]}}</view>
+  </picker>
+
+  <view class="field-label">所属阶段（可选）</view>
+  <picker range="{{stageNames}}" value="{{stageIndex}}" bindchange="onStageChange">
+    <view class="input">{{stageNames[stageIndex]}}</view>
+  </picker>
+
+  <view class="field-label">支付日期</view>
+  <picker mode="date" value="{{payDate}}" bindchange="onDateChange">
+    <view class="input">{{payDate}}</view>
+  </picker>
+
+  <view class="field-label">备注</view>
+  <input class="input" placeholder="如：瓷砖定金" value="{{remark}}" data-field="remark" bindinput="onInput" />
+
+  <view class="field-label">附件凭证（发票 / 收据 / 截图 / 文件，最多 9 个）</view>
+  <view class="att-grid">
+    <view wx:for="{{attachments}}" wx:key="fileID" class="att-item">
+      <image wx:if="{{item.kind === 'image'}}" class="att-thumb" src="{{item.fileID}}" mode="aspectFill"
+        data-index="{{index}}" bindtap="previewAttachment" />
+      <view wx:else class="att-file" data-index="{{index}}" bindtap="previewAttachment">
+        <view class="att-file-name">{{item.name}}</view>
+      </view>
+      <view class="att-del" data-index="{{index}}" catchtap="removeAttachment">×</view>
+    </view>
+    <view wx:if="{{attachments.length < 9}}" class="att-add" bindtap="addAttachment">＋ 添加</view>
+  </view>
+
+  <view class="btn-primary" style="margin-top:32rpx" bindtap="onSave">{{saving ? '保存中…' : '保存'}}</view>
+</view>

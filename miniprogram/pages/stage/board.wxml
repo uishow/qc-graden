@@ -1,0 +1,38 @@
+<view class="page-root {{theme}}">
+  <view class="board-title">
+    <view style="font-weight:700;font-size:34rpx">{{title}}</view>
+    <view wx:if="{{scope === 'wholehouse'}}" class="tag tag-accent">全屋定制</view>
+  </view>
+  <view wx:if="{{scope === 'wholehouse'}}" class="muted" style="margin:-4rpx 0 16rpx">仅显示全屋定制相关阶段；点下方按钮可新建全屋定制阶段</view>
+
+  <view class="action-bar">
+    <view class="btn-primary" style="flex:1" bindtap="addStage">＋ {{scope === 'wholehouse' ? '添加全屋定制阶段' : '添加阶段'}}</view>
+    <view class="btn-outline" style="flex:1" bindtap="goRoom">房间管理</view>
+  </view>
+
+  <view wx:if="{{stages.length === 0}}" class="empty">{{scope === 'wholehouse' ? '还没有全屋定制阶段，点上方「添加全屋定制阶段」开始' : '还没有施工阶段，点上方「添加阶段」开始'}}</view>
+
+  <view wx:for="{{stages}}" wx:key="id" class="card">
+    <view class="between">
+      <view style="font-weight:600;font-size:32rpx">{{item.name}}</view>
+      <view class="tag {{item.status === 'done' ? 'tag-accent' : ''}}">{{item.statusName}}</view>
+    </view>
+
+    <view class="muted" style="margin:10rpx 0 16rpx">
+      {{item.start_date ? item.start_date : '—'}} ~ {{item.end_date ? item.end_date : (item.status === 'doing' ? '进行中' : '—')}}
+    </view>
+
+    <view wx:if="{{item.hasCost}}" class="row" style="gap:24rpx;margin-bottom:14rpx">
+      <view class="muted">花费 <text class="accent">{{item.expText}}</text></view>
+      <view class="muted">材料 <text class="accent">{{item.matText}}</text></view>
+    </view>
+
+    <view class="row" style="gap:16rpx">
+      <view class="btn-outline" style="flex:1" bindtap="advance" data-id="{{item.id}}">
+        {{item.status === 'pending' ? '开始施工' : item.status === 'doing' ? '标记完工' : '重置为未开始'}}
+      </view>
+      <view class="btn-outline sm" bindtap="renameStage" data-id="{{item.id}}">重命名</view>
+      <view class="btn-danger sm" bindtap="removeStage" data-id="{{item.id}}">删除</view>
+    </view>
+  </view>
+</view>

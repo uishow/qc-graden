@@ -1,0 +1,224 @@
+/* 双主题令牌：A 中古暖调 / B 轻奢冷调（设计文档 §10） */
+.theme-a {
+  --c-primary: #8C5A3B;
+  --c-bg: #FAF6EF;
+  --c-secondary: #3F5A4C;
+  --c-secondary-bg: #EDF3EF;
+  --c-accent: #B08A47;
+  --c-accent-bg: #F6EFE2;
+  --c-success: #3F7A4F;
+  --c-success-bg: #E5F0E8;
+  --c-text: #3A322B;
+  --c-text-2: #8A7E72;
+  --c-card: #FFFFFF;
+  --c-card-border: #E8DFCF;
+}
+.theme-b {
+  --c-primary: #3E3E42;
+  --c-bg: #F7F7F5;
+  --c-secondary: #6E7F8D;
+  --c-secondary-bg: #EEF1F4;
+  --c-accent: #C2A878;
+  --c-accent-bg: #F4EFE6;
+  --c-success: #4A8E63;
+  --c-success-bg: #E7F1EC;
+  --c-text: #232326;
+  --c-text-2: #8B8B90;
+  --c-card: #FFFFFF;
+  --c-card-border: #E6E6E2;
+}
+
+.page-root {
+  min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 24rpx 24rpx 140rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: var(--c-card);
+  border: 1rpx solid var(--c-card-border);
+  border-radius: 20rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.title-serif {
+  font-family: serif;
+  font-weight: 600;
+  font-size: 34rpx;
+  color: var(--c-text);
+}
+
+.muted { color: var(--c-text-2); font-size: 26rpx; }
+.accent { color: var(--c-accent); font-weight: 600; }
+
+.btn-primary {
+  background: var(--c-primary);
+  color: #FFFFFF;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  text-align: center;
+  padding: 20rpx 0;
+}
+.btn-outline {
+  border: 1rpx solid var(--c-primary);
+  color: var(--c-primary);
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  text-align: center;
+  padding: 20rpx 0;
+  background: transparent;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 22rpx;
+  color: var(--c-secondary);
+  background: var(--c-secondary-bg);
+  border-radius: 999rpx;
+  padding: 4rpx 18rpx;
+  margin-right: 12rpx;
+}
+.tag-accent {
+  color: var(--c-accent);
+  background: transparent;
+  border: 1rpx solid var(--c-accent);
+}
+
+.fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: 48rpx;
+  background: var(--c-primary);
+  color: #FFFFFF;
+  border-radius: 999rpx;
+  padding: 20rpx 40rpx;
+  font-size: 30rpx;
+  z-index: 10;
+}
+
+.empty {
+  text-align: center;
+  color: var(--c-text-2);
+  padding: 120rpx 0;
+  font-size: 28rpx;
+}
+
+.row { display: flex; align-items: center; }
+.between { display: flex; align-items: center; justify-content: space-between; }
+
+.input, .textarea {
+  background: var(--c-card);
+  border: 1rpx solid var(--c-card-border);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  font-size: 30rpx;
+  margin-bottom: 20rpx;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  line-height: 48rpx;
+}
+.textarea { min-height: 220rpx; }
+
+.field-label { font-size: 26rpx; color: var(--c-text-2); margin: 12rpx 0 8rpx; }
+
+/* 附件凭证（花费/材料编辑页共用）：缩略图墙 + 文件名块 + 删除角标 + 添加位 */
+.att-grid { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.att-item { position: relative; width: 160rpx; height: 160rpx; }
+.att-thumb { width: 100%; height: 100%; border-radius: 12rpx; background: var(--c-card); border: 1rpx solid var(--c-card-border); }
+.att-file {
+  width: 100%; height: 100%; border-radius: 12rpx;
+  background: var(--c-card); border: 1rpx solid var(--c-card-border);
+  display: flex; align-items: center; padding: 12rpx; box-sizing: border-box;
+}
+.att-file-name {
+  font-size: 22rpx; color: var(--c-text-2); word-break: break-all;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.att-del {
+  position: absolute; top: -12rpx; right: -12rpx; width: 40rpx; height: 40rpx;
+  border-radius: 50%; background: #C0392B; color: #fff; font-size: 28rpx; line-height: 40rpx; text-align: center;
+}
+.att-add {
+  width: 160rpx; height: 160rpx; border-radius: 12rpx; border: 2rpx dashed var(--c-card-border);
+  display: flex; align-items: center; justify-content: center; font-size: 26rpx; color: var(--c-text-2);
+}
+
+/* 通用：弹性占位、弹窗遮罩与底部面板、小按钮、危险按钮（首页/我的页共用） */
+.flex1 { flex: 1; }
+.mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0; /* 显式四边，避免 inset 在旧基础库不识别导致遮罩未撑满 */
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* 面板钉在底部 */
+  /* 自定义 tabBar 的框架包装层层级高于普通弹窗，z-index 必须 > 9999 才能盖住它
+     （官方社区结论）；配合弹窗打开期间 getTabBar().setData({hidden:true}) 双保险 */
+  z-index: 99999;
+}
+.sheet {
+  width: 100%;
+  background: var(--c-bg);
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 40rpx 32rpx;
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  max-height: 86vh;
+  /* 弹性纵向布局：head/foot 吸住不缩，body 在剩余空间内滚动 */
+  display: flex;
+  flex-direction: column;
+}
+.sheet-head { flex-shrink: 0; }
+/* 可滚动主体：flex:1 + min-height:0 是关键。
+   不设 min-height:0 时，flex 子项不会收缩到内容高度以下，会被长列表撑高，
+   从而把底部 .sheet-foot 顶出可视区，导致「退出/删除」等按钮被裁切。
+   键盘弹起时由页面给 .sheet 加 margin-bottom:{{kbHeight}}px 整体抬升。 */
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sheet-foot {
+  flex-shrink: 0;
+  padding-top: 24rpx;
+  margin-top: 16rpx;
+  border-top: 1rpx solid var(--c-card-border);
+}
+.join-input {
+  background: var(--c-card);
+  border: 1rpx solid var(--c-card-border);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  font-size: 40rpx;
+  letter-spacing: 12rpx;
+  text-align: center;
+  color: var(--c-text); /* 显式文字色，避免继承自弹窗/遮罩时因配色相同导致敲的数字看不见 */
+  line-height: 1.4;
+  width: 100%;
+  box-sizing: border-box;
+}
+.btn-sm {
+  font-size: 24rpx;
+  color: var(--c-primary);
+  border: 1rpx solid var(--c-primary);
+  border-radius: 999rpx;
+  padding: 6rpx 20rpx;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+.btn-sm.danger { color: #C0392B; border-color: #C0392B; }
+.btn-danger {
+  background: #C0392B;
+  color: #FFFFFF;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  text-align: center;
+  padding: 20rpx 0;
+}

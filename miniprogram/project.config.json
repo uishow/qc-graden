@@ -1,0 +1,38 @@
+{
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "appid": "wx5074d5bfbc6e1aaf",
+  "projectname": "renovation-diary",
+  "setting": {
+    "cloudfunctionRoot": "cloudfunctions/",
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": false,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "enhance": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "libVersion": "latest",
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {}
+}

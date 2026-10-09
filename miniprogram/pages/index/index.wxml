@@ -1,0 +1,117 @@
+<view class="page-root {{theme}}">
+
+  <view wx:if="{{needLogin}}" class="empty">
+    <view>当前为预览环境，微信登录受限</view>
+    <view class="muted" style="margin-top:12rpx">在已授权的小程序中打开即可使用完整功能</view>
+  </view>
+
+  <block wx:elif="{{project}}">
+    <view class="card" bindtap="goStage">
+      <view class="between">
+        <view class="title-serif">{{project.name}}</view>
+        <view class="tag">{{currentStage ? currentStage.name : '未开始'}}</view>
+      </view>
+      <view class="muted" style="margin-top:8rpx">{{project.house_type || '未填写户型'}} · {{project.area || '—'}}㎡</view>
+    </view>
+
+    <!-- 施工进度看板 -->
+    <view class="card">
+      <view class="between">
+        <view style="font-weight:600">施工进度</view>
+        <view class="muted">{{stageDone}}/{{stageTotal}} 阶段</view>
+      </view>
+      <view style="height:12rpx;background:var(--c-secondary-bg);border-radius:999rpx;margin:14rpx 0 8rpx">
+        <view style="height:12rpx;width:{{stagePercent}}%;background:var(--c-secondary);border-radius:999rpx"></view>
+      </view>
+      <view class="muted" style="margin-bottom:14rpx">已完成 {{stagePercent}}%<text wx:if="{{currentStage}}"> · 当前：{{currentStage.name}}</text></view>
+      <view class="row" style="flex-wrap:wrap;gap:12rpx">
+        <view wx:for="{{stageChips}}" wx:key="name" class="stage-chip {{item.status}}">{{item.name}}</view>
+      </view>
+    </view>
+
+    <!-- 费用总览看板 -->
+    <view class="card">
+      <view class="between">
+        <view style="font-weight:600">费用总览</view>
+        <view class="muted">预算 {{budgetText}}</view>
+      </view>
+      <view class="between" style="margin-top:12rpx">
+        <view>
+          <view class="muted">已花费</view>
+          <view class="accent" style="font-size:40rpx">{{spentText}}</view>
+        </view>
+        <view style="text-align:right">
+          <view class="muted">剩余 {{remainText}}</view>
+          <view class="muted">已用 {{spentPercent}}%</view>
+        </view>
+      </view>
+      <view style="height:12rpx;background:var(--c-secondary-bg);border-radius:999rpx;margin:14rpx 0">
+        <view style="height:12rpx;width:{{spentPercent}}%;background:var(--c-accent);border-radius:999rpx"></view>
+      </view>
+      <view wx:if="{{typeSums.length}}">
+        <view wx:for="{{typeSums}}" wx:key="name" class="between" style="padding:8rpx 0">
+          <view class="muted">{{item.name}}</view>
+          <view class="accent">{{item.text}}</view>
+        </view>
+      </view>
+      <view class="between" style="padding:8rpx 0;border-top:1rpx solid var(--c-card-border);margin-top:8rpx">
+        <view>
+          <view class="muted">材料清单合计（已购 {{matPurchasedText}} · 待购 {{matPendingText}}）</view>
+          <view class="muted" style="font-size:22rpx">已花费只计入已购部分，待购推进后自动计入</view>
+        </view>
+        <view class="accent">{{materialTotalText}}</view>
+      </view>
+    </view>
+
+    <view class="between" style="margin:24rpx 0 12rpx">
+      <view style="font-weight:600">最新日记</view>
+      <view class="muted" bindtap="goDiaryList">全部 →</view>
+    </view>
+    <view wx:if="{{latestDiaries.length === 0}}" class="card muted">还没有日记，去「日记」页记第一篇吧</view>
+    <view wx:else class="card diary-card">
+      <view
+        wx:for="{{latestDiaries}}"
+        wx:key="id"
+        class="diary-line {{index === 0 ? '' : 'diary-line-top'}}"
+        bindtap="goDiary"
+        data-id="{{item.id}}"
+      >
+        <view class="diary-title">{{item.title}}</view>
+        <view class="diary-meta">
+          <text class="muted">{{item.diary_date}}</text>
+          <text wx:if="{{item.image_paths.length}}" class="muted diary-img">{{item.image_paths.length}}张图</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty">
+    <view class="title-serif">开始你的装修记录</view>
+    <view class="muted" style="margin:16rpx 0 40rpx">创建第一个装修项目，或由好友分享邀请码加入</view>
+    <view class="btn-primary" bindtap="goCreate">创建项目</view>
+    <view class="btn-outline" style="margin-top:20rpx" bindtap="goJoin">输入邀请码加入</view>
+  </view>
+
+  <!-- 邀请码加入弹窗 -->
+  <view wx:if="{{showJoin}}" class="mask" bindtap="cancelJoin">
+    <view class="sheet" catchtap="noop" style="margin-bottom: {{kbHeight}}px">
+      <view style="font-weight:600;font-size:32rpx;margin-bottom:8rpx">加入项目</view>
+      <view class="muted" style="margin-bottom:24rpx">输入好友分享的 6 位邀请码</view>
+      <input
+        class="join-input"
+        type="number"
+        maxlength="6"
+        placeholder="6 位数字邀请码"
+        bindinput="onJoinInput"
+        focus="{{showJoin}}"
+        adjust-position="{{false}}"
+        confirm-type="done"
+      />
+      <view class="row" style="gap:16rpx;margin-top:28rpx">
+        <view class="btn-outline flex1" bindtap="cancelJoin">取消</view>
+        <view class="btn-primary flex1" bindtap="confirmJoin">加入</view>
+      </view>
+    </view>
+  </view>
+
+</view>

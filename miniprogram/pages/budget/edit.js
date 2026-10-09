@@ -1,0 +1,171 @@
+const { cloud } = require('../../utils/cloud')
+const store = require('../../utils/store')
+const { yuan2fen, fen2yuan, today } = require('../../utils/format')
+const { BELONG_WHOLEHOUSE } = require('../../utils/wholehouse')
+const att = require('../../utils/attachment')
+
+// B 防重模型：花费类目不再含「材料」，材料支出统一在「材料清单」登记、自动计入预算，
+// 结构上杜绝与材料清单重复。可手填类目为 人工 / 设计 / 其他 / 订金·定金。
+const TYPES = ['labor', 'design', 'deposit', 'other']
+const TYPE_NAMES = { material: '材料', labor: '人工', design: '设计', other: '其他', deposit: '订金/定金' }
+const BELONG_NAMES = ['无归属', '全屋定制']
+
+Page({
+  data: {
+    theme: 'theme-a',
+    id: null,
+    baseVersion: 1,
+    amount: '',
+    typeIndex: 0,
+    typeNames: TYPES.map((t) => TYPE_NAMES[t]),
+    belongIndex: 0,
+    belongNames: BELONG_NAMES,
+    stageIndex: 0,
+    stageNames: ['不关联（通用）'],
+    stageIds: [''],
+    payDate: today(),
+    remark: '',
+    attachments: [], // [{fileID, name, kind:'image'|'file'}] 附件凭证
+    saving: false,
+  },
+
+  async onLoad(options) {
+    store.applyTheme(this)
+    this.projectId = store.getCurrentProjectId()
+    // 从「花费-全屋定制」入口进入时预选归属
+    if (options.belong === BELONG_WHOLEHOUSE) this.setData({ belongIndex: 1 })
+    await this.loadStages()
+    if (options.id) {
+      const { data, error } = await cloud.database
+        .from('expenses').select('*').eq('id', options.id).limit(1)
+      if (error) {
+        wx.showToast({ title: '记录加载失败', icon: 'none' })
+        return
+      }
+      const d = data && data[0]
+      if (d) {
+        const stageIndex = this.data.stageIds.indexOf(d.stage_id || '')
+        this.setData({
+          id: d.id,
+          baseVersion: d.version,
+          amount: fen2yuan(d.amount, false),
+          typeIndex: Math.max(0, TYPES.indexOf(d.type)),
+          belongIndex: d.belong === BELONG_WHOLEHOUSE ? 1 : 0,
+          stageIndex: stageIndex >= 0 ? stageIndex : 0,
+          payDate: d.pay_date,
+          remark: d.remark || '',
+          attachments: att.normalizeList(d.attachments),
+        })
+      }
+    }
+  },
+
+  // 加载本项目阶段，供「所属阶段」可选关联（轻量关联：不强制）
+  async loadStages() {
+    const pid = store.getCurrentProjectId()
+    const { data } = await cloud.database
+      .from('stages').select('id,name').eq('project_id', pid).order('sort_order')
+    const rows = data || []
+    this.setData({
+      stageNames: ['不关联（通用）'].concat(rows.map((s) => s.name)),
+      stageIds: [''].concat(rows.map((s) => s.id)),
+    })
+  },
+
+  onInput(e) {
+    this.setData({ [e.currentTarget.dataset.field]: e.detail.value })
+  },
+  onTypeChange(e) {
+    this.setData({ typeIndex: Number(e.detail.value) })
+  },
+  onBelongChange(e) {
+    this.setData({ belongIndex: Number(e.detail.value) })
+  },
+  onStageChange(e) {
+    this.setData({ stageIndex: Number(e.detail.value) })
+  },
+  onDateChange(e) {
+    this.setData({ payDate: e.detail.value })
+  },
+
+  // —— 附件凭证：图片（拍照/相册）+ 微信聊天文件，传云存储，随保存写入 attachments ——
+  async addAttachment() {
+    const picked = await att.choose(this.data.attachments.length)
+    if (!picked.length) return
+    wx.showLoading({ title: '上传中…', mask: true })
+    try {
+      const uploaded = await att.upload(picked, 'expenses')
+      this.setData({ attachments: this.data.attachments.concat(uploaded) })
+    } catch (e) {
+      wx.showToast({ title: '上传失败，请重试', icon: 'none' })
+    } finally {
+      wx.hideLoading()
+    }
+  },
+
+  removeAttachment(e) {
+    const i = Number(e.currentTarget.dataset.index)
+    const list = this.data.attachments.slice()
+    list.splice(i, 1)
+    this.setData({ attachments: list }) // 仅移除引用，云存储文件保留（软删可追溯）
+  },
+
+  async previewAttachment(e) {
+    const a = this.data.attachments[Number(e.currentTarget.dataset.index)]
+    if (!a) return
+    if (a.kind === 'image') {
+      const fileIDs = this.data.attachments.filter((x) => x.kind === 'image').map((x) => x.fileID)
+      await att.previewImages(fileIDs, a.fileID)
+    } else {
+      await att.openFile(a.fileID, a.name)
+    }
+  },
+
+  async onSave() {
+    const { id, baseVersion, amount, typeIndex, belongIndex, stageIndex, payDate, remark } = this.data
+    const fen = yuan2fen(amount)
+    if (fen <= 0) {
+      wx.showToast({ title: '请填写金额', icon: 'none' })
+      return
+    }
+    if (this.data.saving) return
+    this.setData({ saving: true })
+    try {
+      const now = new Date().toISOString()
+      const payload = {
+        type: TYPES[typeIndex],
+        amount: fen,
+        belong: belongIndex === 1 ? BELONG_WHOLEHOUSE : '',
+        stage_id: this.data.stageIds[stageIndex] || '',
+        pay_date: payDate,
+        remark: remark.trim(),
+        attachments: this.data.attachments,
+        updated_at: now,
+      }
+      if (id) {
+        // 老数据可能没有 version 字段：仅当确有版本号时才加乐观锁校验，否则按 id 直接更新，避免编辑失败
+        const ver = baseVersion || 1
+        let q = cloud.database
+          .from('expenses').update({ ...payload, version: ver + 1 })
+          .eq('id', id)
+        if (baseVersion) q = q.eq('version', baseVersion)
+        const { data, error } = await q.select()
+        if (error) throw error
+        if (!data || data.length === 0) {
+          wx.showModal({ title: '记录已被他人修改', content: '请返回查看最新版本后再编辑。', showCancel: false })
+          return
+        }
+      } else {
+        const { error } = await cloud.database
+          .from('expenses').insert({ ...payload, version: 1, created_at: new Date().toISOString(), deleted: false, project_id: this.projectId })
+        if (error) throw error
+      }
+      wx.showToast({ title: '已保存' })
+      setTimeout(() => wx.navigateBack(), 600)
+    } catch (e) {
+      wx.showToast({ title: e.message || '保存失败', icon: 'none' })
+    } finally {
+      this.setData({ saving: false })
+    }
+  },
+})

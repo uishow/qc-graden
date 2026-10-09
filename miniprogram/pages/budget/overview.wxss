@@ -1,0 +1,104 @@
+/* 主题令牌来自 app.wxss */
+
+/* Tab 切换：费用总览 / 材料清单 / 花费清单 / 全屋定制（样式同知识库） */
+.tabs {
+  display: flex;
+  background: var(--c-secondary-bg);
+  border-radius: 999rpx;
+  padding: 6rpx;
+  margin-bottom: 24rpx;
+}
+.tab {
+  flex: 1;
+  text-align: center;
+  font-size: 26rpx;
+  color: var(--c-text-2);
+  padding: 16rpx 0;
+  border-radius: 999rpx;
+  transition: all 0.15s;
+}
+.tab-on {
+  background: var(--c-card);
+  color: var(--c-primary);
+  font-weight: 600;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+/* 分节标题：每段自带「＋」入口 */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 28rpx 0 14rpx;
+}
+.section-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.btn-add {
+  font-size: 26rpx;
+  color: #fff;
+  background: var(--c-accent);
+  border-radius: 999rpx;
+  padding: 10rpx 26rpx;
+  font-weight: 600;
+}
+.btn-add:active {
+  opacity: 0.85;
+}
+
+/* 费用总览：分组标题（按阶段 / 按花费类目 / 按材料类型） */
+.group-label {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: var(--c-accent);
+  margin: 20rpx 0 6rpx;
+}
+.group-label:first-child {
+  margin-top: 0;
+}
+
+/* 材料列表操作按钮（从原材料页迁移） */
+.sm {
+  font-size: 26rpx;
+  padding: 14rpx 24rpx;
+}
+
+/* 紧凑列表卡：明细 / 材料清单 / 全屋定制归集等重复列表项用，比全局 .card 矮一截 */
+.card.slim {
+  padding: 14rpx 20rpx;
+  margin-bottom: 12rpx;
+  border-radius: 16rpx;
+}
+
+/* 一行式布局：名称+元信息挤同一行，超长省略；金额/删除固定右侧 */
+.slim-row { display: flex; align-items: center; gap: 16rpx; }
+.slim-main {
+  flex: 1; min-width: 0;
+  display: flex; align-items: baseline; gap: 12rpx; overflow: hidden;
+}
+.slim-title {
+  font-weight: 600; font-size: 28rpx; color: var(--c-text);
+  max-width: 55%; flex-shrink: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.slim-meta {
+  flex: 1; font-size: 24rpx; color: var(--c-text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.slim-right { display: flex; align-items: center; gap: 16rpx; flex-shrink: 0; }
+.slim-amount { color: var(--c-accent); font-weight: 600; font-size: 28rpx; }
+.slim-del {
+  font-size: 24rpx; color: #c0392b;
+  border: 1rpx solid #c0392b; border-radius: 999rpx; padding: 4rpx 18rpx;
+}
+.btn-danger {
+  background: transparent;
+  color: #C0392B;
+  border: 1rpx solid #C0392B;
+  border-radius: 16rpx;
+  font-size: 26rpx;
+  text-align: center;
+  padding: 14rpx 24rpx;
+}

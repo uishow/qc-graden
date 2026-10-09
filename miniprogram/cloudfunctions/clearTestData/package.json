@@ -1,0 +1,9 @@
+{
+  "name": "clearTestData",
+  "version": "1.0.0",
+  "description": "清除测试数据，保留知识库分类与官方种子文章",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

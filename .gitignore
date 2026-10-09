@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# 依赖（云端安装依赖，本地不需要入库）
+node_modules/
+
+# 微信开发者工具产物
+miniprogram/sourcemap.zip
+
+# WorkBuddy 会话标记（非项目源码）
+*.genie

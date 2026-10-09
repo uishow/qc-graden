@@ -1,0 +1,9 @@
+{
+  "name": "transferImaImages",
+  "version": "1.0.0",
+  "description": "把 ima 导入图片转存到云存储并回填 cloud:// fileID（详情页出图前置）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

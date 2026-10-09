@@ -1,0 +1,9 @@
+{
+  "name": "syncIma",
+  "version": "1.0.0",
+  "description": "自动同步 ima 共享知识库到 knowledge_articles（pending 待确认）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

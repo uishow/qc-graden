@@ -1,0 +1,19 @@
+<view class="page-root {{theme}}" wx:if="{{diary}}">
+  <view class="title-serif">{{diary.title}}</view>
+  <view class="muted" style="margin:12rpx 0 24rpx">
+    {{diary.diary_date}} · {{authorName}}<text wx:if="{{editorName}}"> · {{editorName}} 编辑过</text>
+  </view>
+
+  <view class="card" wx:if="{{diary.content}}" style="white-space:pre-wrap">{{diary.content}}</view>
+
+  <view style="display:flex;flex-wrap:wrap;gap:12rpx" wx:if="{{imageUrls.length}}">
+    <image wx:for="{{imageUrls}}" wx:key="*this" src="{{item}}" mode="aspectFill"
+      style="width:220rpx;height:220rpx;border-radius:12rpx"
+      bindtap="previewImage" data-url="{{item}}" />
+  </view>
+
+  <view class="row" style="gap:20rpx;margin-top:48rpx">
+    <view class="btn-outline" style="flex:1" bindtap="goEdit">编辑</view>
+    <view class="btn-outline" style="flex:1;color:var(--c-accent);border-color:var(--c-accent)" bindtap="onDelete">删除</view>
+  </view>
+</view>

@@ -1,0 +1,31 @@
+<view class="page-root {{theme}}">
+  <view class="title-serif" style="margin-bottom:24rpx">创建装修项目</view>
+
+  <view class="field-label">项目名称 *</view>
+  <input class="input" placeholder="如：滨江府 89㎡" value="{{name}}" data-field="name" bindinput="onInput" />
+
+  <view class="field-label">户型</view>
+  <input class="input" placeholder="如：三室两厅" value="{{houseType}}" data-field="houseType" bindinput="onInput" />
+  <view class="chips">
+    <view
+      wx:for="{{houseTypePresets}}"
+      wx:key="*this"
+      class="chip {{houseType === item ? 'chip-on' : ''}}"
+      data-val="{{item}}"
+      bindtap="pickHouseType"
+    >{{item}}</view>
+  </view>
+
+  <view class="field-label">面积（㎡）</view>
+  <input class="input" type="digit" placeholder="如：89" value="{{area}}" data-field="area" bindinput="onInput" />
+
+  <view class="field-label">总预算（元）</view>
+  <input class="input" type="digit" placeholder="如：200000" value="{{budget}}" data-field="budget" bindinput="onInput" />
+
+  <view class="field-label">开工日期</view>
+  <picker mode="date" value="{{startDate}}" bindchange="onDateChange">
+    <view class="input">{{startDate}}</view>
+  </picker>
+
+  <view class="btn-primary" style="margin-top:32rpx" bindtap="onSave">{{saving ? '创建中…' : '创建项目'}}</view>
+</view>

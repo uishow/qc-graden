@@ -1,0 +1,25 @@
+/* 主题令牌来自 app.wxss */
+
+/* 顶部标题行 + 记一篇按钮（同花费页 section-head 风格） */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8rpx 0 14rpx;
+}
+.section-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.btn-add {
+  font-size: 26rpx;
+  color: #fff;
+  background: var(--c-accent);
+  border-radius: 999rpx;
+  padding: 10rpx 26rpx;
+  font-weight: 600;
+}
+.btn-add:active {
+  opacity: 0.85;
+}

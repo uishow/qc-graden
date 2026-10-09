@@ -1,0 +1,139 @@
+<view class="page-root {{theme}}">
+  <view wx:if="{{!signedIn}}" class="empty">
+    <view>当前为预览环境，微信登录受限</view>
+  </view>
+
+  <block wx:else>
+    <view style="font-weight:600;margin-bottom:12rpx">我的项目</view>
+    <view wx:if="{{projects.length === 0}}" class="card muted">还没有项目，去创建一个或输入邀请码加入</view>
+    <view
+      wx:for="{{projects}}"
+      wx:key="id"
+      class="card proj"
+      bindtap="switchProject"
+      data-id="{{item.id}}"
+    >
+      <view class="proj-main">
+        <view style="font-weight:600">{{item.name}}</view>
+        <view class="muted">{{item.roleLabel}} · 点按切换为当前项目</view>
+      </view>
+      <view class="proj-side">
+        <view wx:if="{{item.isCurrent}}" class="tag tag-accent">当前</view>
+        <view wx:if="{{item.isManager}}" class="btn-sm" catchtap="openManage" data-id="{{item.id}}">管理</view>
+      </view>
+    </view>
+    <view class="row" style="gap:16rpx">
+      <view class="card btn-outline flex1" bindtap="goCreate">＋ 新建项目</view>
+      <view class="card btn-outline flex1" bindtap="goJoin">输入邀请码加入</view>
+    </view>
+
+    <view style="font-weight:600;margin:32rpx 0 12rpx">常用功能</view>
+    <view class="card between" bindtap="goRoom">
+      <view class="row" style="gap:16rpx">
+        <view style="font-size:30rpx">🚪</view>
+        <view>房间管理</view>
+      </view>
+      <view class="muted">›</view>
+    </view>
+    <view class="card between" bindtap="goExport">
+      <view class="row" style="gap:16rpx">
+        <view style="font-size:30rpx">📤</view>
+        <view>导出费用数据</view>
+      </view>
+      <view class="muted">CSV · ›</view>
+    </view>
+
+    <view style="font-weight:600;margin:32rpx 0 12rpx">外观</view>
+    <view class="card">
+      <view class="between" style="padding:12rpx 0" bindtap="setThemeA">
+        <view class="row" style="gap:16rpx">
+          <view style="width:40rpx;height:40rpx;border-radius:8rpx;background:#8C5A3B"></view>
+          <view>中古暖调</view>
+        </view>
+        <view wx:if="{{theme === 'theme-a'}}" class="accent">✓</view>
+      </view>
+      <view class="between" style="padding:12rpx 0" bindtap="setThemeB">
+        <view class="row" style="gap:16rpx">
+          <view style="width:40rpx;height:40rpx;border-radius:8rpx;background:#3E3E42"></view>
+          <view>轻奢冷调</view>
+        </view>
+        <view wx:if="{{theme === 'theme-b'}}" class="accent">✓</view>
+      </view>
+    </view>
+
+    <view class="muted" style="margin-top:40rpx;text-align:center">装修日记本 · 设计文档 V1.0</view>
+  </block>
+
+  <!-- 成员管理面板 -->
+  <view wx:if="{{showManage}}" class="mask" bindtap="closeManage">
+    <view class="sheet" catchtap="noopManage">
+      <view class="between sheet-head" style="margin-bottom:8rpx">
+        <view style="font-weight:600;font-size:32rpx">{{managing.name}} · 成员管理</view>
+        <view class="muted" bindtap="closeManage">✕</view>
+      </view>
+
+      <view class="sheet-body">
+      <!-- 邀请码 -->
+      <view class="block">
+        <view class="block-title">家庭邀请码（加入即得「家庭成员」·全部权限）</view>
+        <view class="code-row">
+          <view class="code-val">{{codes.family}}</view>
+          <view class="btn-sm" bindtap="copyCode" data-code="{{codes.family}}">复制</view>
+          <view class="btn-sm" bindtap="regenCode" data-type="family">重置</view>
+        </view>
+      </view>
+      <view class="block">
+        <view class="block-title">协作邀请码（加入即得「协作成员」·仅协同编辑）</view>
+        <view class="code-row">
+          <view class="code-val">{{codes.member}}</view>
+          <view class="btn-sm" bindtap="copyCode" data-code="{{codes.member}}">复制</view>
+          <view class="btn-sm" bindtap="regenCode" data-type="member">重置</view>
+        </view>
+      </view>
+
+      <!-- 成员列表 -->
+      <view class="block">
+        <view class="block-title">成员（{{memberList.length}}）</view>
+        <view wx:if="{{memberList.length === 0}}" class="muted">暂无其他成员</view>
+        <view wx:for="{{memberList}}" wx:key="_id" class="member-row">
+          <view class="member-main">
+            <view style="font-weight:600">{{item.nick}}{{item.isSelf ? '（我）' : ''}}</view>
+            <view class="muted">{{item.roleLabel}}</view>
+          </view>
+          <view wx:if="{{!item.isSelf}}" class="btn-sm danger" bindtap="removeMember" data-id="{{item._id}}">移除</view>
+        </view>
+      </view>
+
+      </view><!-- /sheet-body -->
+      <view class="sheet-foot">
+        <view class="row" style="gap:16rpx">
+          <view class="btn-outline flex1" bindtap="exitProject">退出项目</view>
+          <view wx:if="{{managingIsOwner}}" class="btn-danger flex1" bindtap="deleteProject">删除项目</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 邀请码加入弹窗 -->
+  <view wx:if="{{showJoin}}" class="mask" bindtap="cancelJoin">
+    <view class="sheet" catchtap="noop" style="margin-bottom: {{kbHeight}}px">
+      <view style="font-weight:600;font-size:32rpx;margin-bottom:8rpx">加入项目</view>
+      <view class="muted" style="margin-bottom:24rpx">输入好友分享的 6 位邀请码</view>
+      <input
+        class="join-input"
+        type="number"
+        maxlength="6"
+        placeholder="6 位数字邀请码"
+        bindinput="onJoinInput"
+        focus="{{showJoin}}"
+        adjust-position="{{false}}"
+        confirm-type="done"
+      />
+      <view class="row" style="gap:16rpx;margin-top:28rpx">
+        <view class="btn-outline flex1" bindtap="cancelJoin">取消</view>
+        <view class="btn-primary flex1" bindtap="confirmJoin">加入</view>
+      </view>
+    </view>
+  </view>
+
+</view>

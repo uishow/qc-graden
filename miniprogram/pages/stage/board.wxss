@@ -1,0 +1,19 @@
+/* 施工阶段看板：复用 app.wxss 的 .page-root / .card / .between / .row / .tag / .muted / .btn-outline / .btn-primary */
+.action-bar {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+.sm {
+  font-size: 26rpx;
+  padding: 14rpx 24rpx;
+}
+.btn-danger {
+  background: transparent;
+  color: #C0392B;
+  border: 1rpx solid #C0392B;
+  border-radius: 16rpx;
+  font-size: 26rpx;
+  text-align: center;
+  padding: 14rpx 24rpx;
+}

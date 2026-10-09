@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="docx-page-size" content="A4">
+<title>多人协作装修日记本 · 微信小程序设计文档</title>
+<style>
+@page { @bottom-center { content: counter(page); } }
+@page cover { @bottom-center { content: none; } }
+section[role="cover"] { page: cover; }
+
+:root {
+  --fs-h1: var(--typography-fontSize-h1, 20pt);
+  --fs-h2: var(--typography-fontSize-h2, 11pt);
+  --fs-h3: var(--typography-fontSize-h3, 10pt);
+  --fs-body: var(--typography-fontSize-body, 9pt);
+  --fs-small: var(--typography-fontSize-small, 8pt);
+  --ff-heading: var(--typography-fontFamily-heading, "微软雅黑", "Microsoft YaHei", "PingFang SC", sans-serif);
+  --ff-body: var(--typography-fontFamily-body, "微软雅黑", "Microsoft YaHei", "PingFang SC", sans-serif);
+  --lh-body: var(--typography-lineHeight-body, 1.6);
+  --fw-bold: var(--typography-fontWeight-heading, 600);
+  --color-primary: var(--color-primary, #1565C0);
+  --color-heading: var(--color-heading, #1A237E);
+  --color-text: var(--color-text, #212121);
+  --color-muted: var(--color-textSecondary, #616161);
+  --color-border: var(--color-divider, #E0E0E0);
+  --color-bg: var(--color-background, #FFFFFF);
+  --color-highlight: var(--color-surface, #F5F7FA);
+  --color-summary-bg: var(--color-surface, #F5F7FA);
+  --color-summary-border: var(--color-primary, #1565C0);
+  --summary-border-width: 4px;
+  --radius-card: 8px;
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.08);
+  --spacing-paragraph: var(--spacing-paragraph, 0.75em);
+  --spacing-section: var(--spacing-sectionGap, 2.5em);
+  --spacing-block: 1em;
+  --margin-page: 2.5cm;
+  --page-content-width: var(--layout-maxContentWidth, 15.6cm);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--ff-body); font-size: var(--fs-body); line-height: var(--lh-body);
+  color: var(--color-text); background: var(--color-bg);
+  max-width: var(--page-content-width); margin-left: auto; margin-right: auto;
+}
+
+.report-cover { padding: var(--margin-page); background: var(--color-highlight); min-height: 55vh; }
+.cover-category { font-size: var(--typography-fontSize-coverCategory); font-family: var(--ff-heading); font-weight: var(--fw-bold); color: var(--color-primary); letter-spacing: 0.08em; margin-bottom: var(--spacing-paragraph); }
+.cover-title { font-size: var(--typography-fontSize-coverTitle); font-family: var(--ff-heading); font-weight: var(--fw-bold); color: var(--color-primary); margin-bottom: var(--spacing-paragraph); }
+.cover-subtitle { font-size: var(--typography-fontSize-subtitle); color: var(--color-muted); margin-bottom: var(--spacing-section); }
+.cover-meta { font-size: var(--fs-small); color: var(--color-muted); }
+
+.doc-toc { padding: var(--spacing-block) var(--margin-page); border-bottom: 1px solid var(--color-border); }
+.toc-title { font-weight: var(--fw-bold); margin-bottom: var(--spacing-paragraph); }
+.toc-list li { margin-bottom: var(--spacing-paragraph); }
+.toc-list a { color: var(--color-primary); text-decoration: none; }
+
+.executive-summary {
+  margin: var(--spacing-section) var(--margin-page);
+  padding: var(--spacing-block);
+  border-left: var(--summary-border-width) solid var(--color-summary-border);
+  background: var(--color-summary-bg);
+}
+.summary-header h2 { font-size: var(--fs-h2); font-family: var(--ff-heading); margin-bottom: var(--spacing-paragraph); }
+.summary-badge { font-size: var(--fs-small); color: var(--color-muted); font-style: italic; }
+.summary-highlights { margin: var(--spacing-block) 0; }
+.summary-highlights table { border-collapse: separate; border-spacing: 8px 0; }
+.summary-highlights td { vertical-align: top; }
+
+[data-component="data-card"] {
+  padding: var(--spacing-block);
+  background: var(--color-bg);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  border-top: 3px solid var(--color-primary);
+  min-width: 110px;
+}
+[data-component="data-card"][data-title]::before {
+  content: attr(data-title);
+  font-size: var(--fs-small);
+  color: var(--color-muted);
+  display: block; margin-bottom: var(--spacing-paragraph);
+}
+.card-value { font-size: var(--fs-h2); font-weight: var(--fw-bold); line-height: 1.1; color: var(--color-text); display: block; }
+.card-unit { font-size: var(--fs-small); color: var(--color-muted); display: block; }
+
+.report-body { padding: var(--spacing-section) var(--margin-page); }
+.report-body h2 { font-size: var(--fs-h1); font-family: var(--ff-heading); font-weight: var(--fw-bold); color: var(--color-heading); margin-top: var(--spacing-section); margin-bottom: var(--spacing-paragraph); }
+.report-body h3 { font-size: var(--fs-h3); font-family: var(--ff-heading); font-weight: var(--fw-bold); margin-top: var(--spacing-block); margin-bottom: var(--spacing-paragraph); }
+.report-body p { margin-bottom: var(--spacing-paragraph); }
+.report-body figure { margin: var(--spacing-block) 0; text-align: center; }
+.report-body img { max-width: 100%; border: 1px solid var(--color-border); border-radius: 6px; }
+.report-body figcaption { font-size: var(--fs-small); color: var(--color-muted); margin-top: var(--spacing-paragraph); }
+
+table.data { width: 100%; border-collapse: collapse; margin-bottom: var(--spacing-block); }
+table.data th, table.data td { padding: var(--spacing-paragraph); border: 1px solid var(--color-border); font-size: var(--fs-body); text-align: left; }
+table.data th { background: var(--color-highlight); font-family: var(--ff-heading); font-weight: var(--fw-bold); }
+
+.callout-info { border-left: var(--summary-border-width) solid var(--color-primary); background: var(--color-highlight); padding: var(--spacing-paragraph); margin-bottom: var(--spacing-paragraph); }
+.status-text { font-weight: var(--fw-bold); font-size: var(--fs-small); }
+.status-text-active { color: var(--color-primary); }
+.status-text-muted { color: var(--color-muted); }
+
+.appendix { padding: var(--spacing-section) var(--margin-page); border-top: 1px solid var(--color-border); font-size: var(--fs-small); color: var(--color-muted); }
+</style>
+</head>
+<body>
+
+<section role="cover" class="report-cover">
+  <p class="cover-category">产品设计文档</p>
+  <h1 class="cover-title">多人协作装修日记本</h1>
+  <p class="cover-subtitle">微信小程序 · 设计文档（图文版）</p>
+  <div class="cover-meta">
+    <p>版本 V1.0 ｜ 2026-10-06 ｜ 状态：M1 实施中</p>
+  </div>
+</section>
+
+<section role="body" class="report-body" data-page-restart="1">
+
+  <nav class="doc-toc" aria-label="文档目录">
+    <p class="toc-title">目录</p>
+    <ol class="toc-list">
+      <li>一、产品定位</li>
+      <li>二、技术架构</li>
+      <li>三、页面结构与 tabBar</li>
+      <li>四、视觉设计（双主题）</li>
+      <li>五、数据模型</li>
+      <li>六、知识库集成（ima 共享库 → 小程序）</li>
+      <li>七、多人协作与实时同步</li>
+      <li>八、分期交付</li>
+      <li>九、待确认事项</li>
+    </ol>
+  </nav>
+
+  <div class="executive-summary">
+    <div class="summary-header">
+      <h2>执行摘要</h2>
+      <span class="summary-badge">Executive Summary</span>
+    </div>
+    <div class="summary-highlights">
+      <div class="data-card-grid">
+        <div data-component="data-card" data-title="一级标签页"><span class="card-value">5</span><span class="card-unit">个 tab</span></div>
+        <div data-component="data-card" data-title="数据表"><span class="card-value">13</span><span class="card-unit">张（全部 RLS）</span></div>
+        <div data-component="data-card" data-title="施工阶段"><span class="card-value">8</span><span class="card-unit">阶段流水线</span></div>
+        <div data-component="data-card" data-title="视觉主题"><span class="card-value">2</span><span class="card-unit">套可切换</span></div>
+      </div>
+    </div>
+    <p>以「装修项目」为单位的多人协作装修日记本：家庭成员按时间线或房间共同记录装修全过程（图文日记、施工阶段、材料清单、花费明细），内置可分类检索的装修知识库。内容由全员在 ima 共享知识库共同记录，经小程序链接导入沉淀为小程序端知识库（带图、可评论）。前端微信原生，后端 WorkBuddy 云服务。</p>
+  </div>
+
+  <main>
+    <h2>一、产品定位</h2>
+    <table class="data">
+      <thead><tr><th>用户</th><th>核心场景</th></tr></thead>
+      <tbody>
+      <tr><td>业主（主记录者）</td><td>每天拍照记录施工进展，记花费，随时查知识库</td></tr>
+      <tr><td>家庭成员</td><td>远程查看进度，补充记录，共同核对账单</td></tr>
+      <tr><td>好友</td><td>被邀请查看（只读），给建议</td></tr>
+      </tbody>
+    </table>
+
+    <h2>二、技术架构</h2>
+    <p>前端为微信原生小程序（WXML/WXSS/JS），后端为 WorkBuddy 云服务（数据库、认证、存储、LLM 四模块），经云服务 SDK 小程序专用入口集成。同步协议为「增量拉取为主、推送为增强」的三级降级链；所有写操作携带 version 乐观锁，并发冲突由用户选择保留版本。</p>
+
+    <h2>三、页面结构与 tabBar</h2>
+    <p>小程序共 5 个一级标签页，加二级功能页共 13 个页面（M1 范围）。</p>
+    <figure>
+      <img src="images/tabbar.png" alt="tabBar 结构示意图">
+      <figcaption>图 1 ｜ tabBar 结构：首页 / 日记 / 花费 / 知识库 / 我的</figcaption>
+    </figure>
+    <table class="data">
+      <thead><tr><th>标签页</th><th>核心内容</th></tr></thead>
+      <tbody>
+      <tr><td>首页</td><td>当前阶段卡片、预算 vs 已花进度条、最新 3 篇日记</td></tr>
+      <tr><td>日记</td><td>按日分组时间线，右下角「记一篇」悬浮按钮</td></tr>
+      <tr><td>花费</td><td>预算看板（已花/剩余/分类汇总）、明细列表</td></tr>
+      <tr><td>知识库</td><td>7 大分类横滑、关键词搜索、文章卡片流</td></tr>
+      <tr><td>我的</td><td>项目切换、外观（主题）切换、关于</td></tr>
+      </tbody>
+    </table>
+    <figure>
+      <img src="images/home-wireframe.png" alt="首页线框示意图" style="max-width:60%">
+      <figcaption>图 2 ｜ 首页线框：项目卡 → 预算卡 → 最新日记流</figcaption>
+    </figure>
+
+    <h2>四、视觉设计（双主题，用户可切换）</h2>
+    <p>视觉与业主家装审美同频（中古风 / 轻奢风）。两套主题令牌结构一致，在「我的 → 外观」随时切换，选择持久化本地，默认方案 A。</p>
+    <h3>方案 A · 中古暖调（默认）</h3>
+    <figure>
+      <img src="images/theme-a.png" alt="方案 A 色板">
+      <figcaption>图 3 ｜ 方案 A：胡桃棕 / 奶油白 / 墨绿 / 黄铜</figcaption>
+    </figure>
+    <h3>方案 B · 轻奢冷调</h3>
+    <figure>
+      <img src="images/theme-b.png" alt="方案 B 色板">
+      <figcaption>图 4 ｜ 方案 B：炭灰 / 云雾白 / 雾霾蓝 / 香槟金</figcaption>
+    </figure>
+    <table class="data">
+      <thead><tr><th>令牌</th><th>方案 A</th><th>方案 B</th><th>用途</th></tr></thead>
+      <tbody>
+      <tr><td>主色 primary</td><td>#8C5A3B 胡桃棕</td><td>#3E3E42 炭灰</td><td>主按钮、tabBar 选中</td></tr>
+      <tr><td>背景 bg</td><td>#FAF6EF 奶油白</td><td>#F7F7F5 云雾白</td><td>页面背景</td></tr>
+      <tr><td>辅助 secondary</td><td>#3F5A4C 墨绿</td><td>#6E7F8D 雾霾蓝</td><td>阶段标签、进度</td></tr>
+      <tr><td>强调 accent</td><td>#B08A47 黄铜</td><td>#C2A878 香槟金</td><td>金额、预算环</td></tr>
+      <tr><td>正文 text</td><td>#3A322B 深棕灰</td><td>#232326 近黑</td><td>正文标题</td></tr>
+      </tbody>
+    </table>
+    <p class="callout-info">&nbsp;&nbsp;共用规则：标题衬线体（杂志感）、正文系统黑体；卡片 20rpx 圆角 + 0.5px 细边、无阴影；金额一律金色系（不用红绿）；阶段状态按「灰 → 辅助色 → 主色」递进。</p>
+
+    <h2>五、数据模型（13 张表）</h2>
+    <p>数据库全部启用行级安全（RLS），权限唯一事实来源为 members 表，配合三个权限函数：is_project_member / is_project_editor / is_project_owner。金额一律整数分存储；version 为乐观锁；日记与花费软删除。</p>
+    <table class="data">
+      <thead><tr><th>表</th><th>说明</th><th>关键字段</th></tr></thead>
+      <tbody>
+      <tr><td>profiles</td><td>用户档案</td><td>nick_name、avatar_url</td></tr>
+      <tr><td>projects</td><td>装修项目</td><td>name、budget（分）、status、version</td></tr>
+      <tr><td>members</td><td>项目成员（权限载体）</td><td>project_id + user_id 唯一、role（owner/editor/viewer）</td></tr>
+      <tr><td>rooms / stages</td><td>房间 / 施工阶段（建项预置）</td><td>name、status、sort_order</td></tr>
+      <tr><td>diaries</td><td>图文日记</td><td>title、content、image_paths、room_id、stage_id、version</td></tr>
+      <tr><td>materials</td><td>材料清单</td><td>category、quantity、unit_price、total_price、status</td></tr>
+      <tr><td>expenses</td><td>花费明细</td><td>type、amount（分）、pay_date、version</td></tr>
+      <tr><td>knowledge_categories</td><td>知识分类（预置 7 类）</td><td>key、name、sort_order</td></tr>
+      <tr><td>knowledge_articles</td><td>知识文章（带图）</td><td>scope、project_id、contributor_id、link_hash、image_paths</td></tr>
+      <tr><td>knowledge_comments</td><td>文章评论</td><td>article_id、content（可见性跟随文章）</td></tr>
+      <tr><td>revisions</td><td>编辑历史</td><td>collection、doc_id、prev/new_version</td></tr>
+      <tr><td>invites</td><td>邀请码（M2）</td><td>code、role、expire_at、status</td></tr>
+      </tbody>
+    </table>
+
+    <h2>六、知识库集成（ima 共享库 → 小程序）</h2>
+    <table class="data">
+      <thead><tr><th>层</th><th>内容来源</th><th>可见范围</th><th>写入方式</th></tr></thead>
+      <tbody>
+      <tr><td>官方预置库</td><td>ima「装修小常识」批量整理</td><td>全小程序只读</td><td>运维脚本导入</td></tr>
+      <tr><td>项目共享库</td><td>成员在同一 ima 共享库共建的笔记（含现场图）</td><td>本项目成员</td><td>小程序导入页链接导入</td></tr>
+      <tr><td>公共广场（V1.x 可选）</td><td>项目共享中被推荐的内容</td><td>全小程序</td><td>推荐 + 审核</td></tr>
+      </tbody>
+    </table>
+    <p>分工边界：ima 共享库负责「日常共建」（快、随意、可反复改）；小程序知识库负责「精选沉淀」（带分类标签、配图与评论，可与施工阶段/花费对照检索）。导入是主动的精选动作，语义为「快照沉淀」，不做双端同步；按 link_hash 去重。</p>
+    <p class="callout-info">&nbsp;&nbsp;链接解析三级降级：P1 ima 开放 API → P2 抓取免登录 H5 分享页 → P3 手动粘贴正文（必做兜底）。落地前需实测 ima 分享链接形态。</p>
+
+    <h2>七、多人协作与实时同步</h2>
+    <table class="data">
+      <thead><tr><th>能力</th><th>owner</th><th>editor</th><th>viewer</th></tr></thead>
+      <tbody>
+      <tr><td>查看项目全部内容</td><td>✓</td><td>✓</td><td>✓</td></tr>
+      <tr><td>写/改日记、材料、花费</td><td>✓</td><td>✓</td><td>—</td></tr>
+      <tr><td>更新施工阶段状态</td><td>✓</td><td>✓</td><td>—</td></tr>
+      <tr><td>邀请成员 / 改角色 / 移除</td><td>✓</td><td>—</td><td>—</td></tr>
+      <tr><td>项目设置、删除项目</td><td>✓</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <p>同步规格：每集合记录 lastSyncAt，onShow 与下拉刷新时增量拉取（含删除墓碑）；实时性三级——L1 云端推送（验证后启用）、L2 前台轮询 20 秒、L3 仅 onShow。写冲突：编辑页记录 baseVersion，提交时「id + version」双条件更新，冲突时拉取最新版本由用户选择；受控写操作追加 revisions 记录。</p>
+
+    <h2>八、分期交付</h2>
+    <table class="data">
+      <thead><tr><th>里程碑</th><th>内容</th><th>状态</th></tr></thead>
+      <tbody>
+      <tr><td>M1 数据底座 + 单人核心</td><td>登录、建项目、日记/花费/材料 CRUD、阶段看板、知识库浏览</td><td><p class="status-text status-text-active">实施中</p></td></tr>
+      <tr><td>M2 多人协作</td><td>邀请/加入、三角色权限、冲突 UI、增量同步、ima 链接导入</td><td><p class="status-text status-text-muted">待启动</p></td></tr>
+      <tr><td>M3 体验增强</td><td>订阅消息、花费图表、材料联动花费、实时推送</td><td><p class="status-text status-text-muted">待启动</p></td></tr>
+      <tr><td>V1.3</td><td>LLM 装修问答、周报摘要、ima API 直连</td><td><p class="status-text status-text-muted">规划中</p></td></tr>
+      </tbody>
+    </table>
+
+    <h2>九、待确认事项</h2>
+    <table class="data">
+      <thead><tr><th>#</th><th>事项</th><th>影响</th></tr></thead>
+      <tbody>
+      <tr><td>1</td><td>ima「装修小常识」官方内容能否批量导出、条目量级</td><td>决定预置管道脚本化还是人工整理</td></tr>
+      <tr><td>2</td><td>ima 共享库笔记分享链接形态（免登录 H5 或 ima 自家小程序卡片）</td><td>决定解析策略上限，建议尽快实测一篇</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <div class="appendix">
+    <p>本设计文档配套工作版（Markdown）存于项目 docs/ 目录，二者同步维护。文档生成于 WorkBuddy 文档流水线。</p>
+  </div>
+
+</section>
+</body>
+</html>

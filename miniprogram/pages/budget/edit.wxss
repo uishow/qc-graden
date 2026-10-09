@@ -1,0 +1,9 @@
+/* 主题令牌来自 app.wxss */
+
+/* 类型选择下的提示：材料统一在材料清单登记（B 防重模型） */
+.field-hint {
+  font-size: 22rpx;
+  color: var(--c-text-2);
+  margin: -10rpx 0 20rpx;
+  line-height: 1.4;
+}

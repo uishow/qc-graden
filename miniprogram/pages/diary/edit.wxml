@@ -1,0 +1,38 @@
+<view class="page-root {{theme}}">
+  <view class="field-label">标题 *</view>
+  <input class="input" placeholder="今天工地发生了什么？" value="{{title}}" data-field="title" bindinput="onInput" />
+
+  <view class="field-label">正文</view>
+  <textarea class="textarea" placeholder="记录进展、问题、心得…" value="{{content}}" data-field="content" bindinput="onInput" />
+
+  <view class="field-label">日期</view>
+  <picker mode="date" value="{{diaryDate}}" bindchange="onDateChange">
+    <view class="input">{{diaryDate}}</view>
+  </picker>
+
+  <view class="row" style="gap:20rpx">
+    <view style="flex:1">
+      <view class="field-label">房间</view>
+      <picker range="{{rooms}}" range-key="name" value="{{roomIndex}}" bindchange="onRoomChange">
+        <view class="input">{{roomIndex >= 0 ? rooms[roomIndex].name : '选择房间'}}</view>
+      </picker>
+    </view>
+    <view style="flex:1">
+      <view class="field-label">施工阶段</view>
+      <picker range="{{stages}}" range-key="name" value="{{stageIndex}}" bindchange="onStageChange">
+        <view class="input">{{stageIndex >= 0 ? stages[stageIndex].name : '选择阶段'}}</view>
+      </picker>
+    </view>
+  </view>
+
+  <view class="field-label">图片（{{localImages.length}}/9）</view>
+  <view style="display:flex;flex-wrap:wrap;gap:12rpx">
+    <view wx:for="{{localImages}}" wx:key="*this" style="position:relative">
+      <image src="{{item}}" mode="aspectFill" style="width:160rpx;height:160rpx;border-radius:12rpx" />
+      <view catchtap="removeImage" data-index="{{index}}" style="position:absolute;top:-10rpx;right:-10rpx;background:var(--c-primary);color:#fff;width:36rpx;height:36rpx;border-radius:50%;text-align:center;line-height:36rpx;font-size:24rpx">×</view>
+    </view>
+    <view wx:if="{{localImages.length < 9}}" bindtap="chooseImages" style="width:160rpx;height:160rpx;border-radius:12rpx;border:1rpx dashed var(--c-text-2);display:flex;align-items:center;justify-content:center;color:var(--c-text-2)">＋</view>
+  </view>
+
+  <view class="btn-primary" style="margin-top:40rpx" bindtap="onSave">{{saving ? '保存中…' : '保存'}}</view>
+</view>

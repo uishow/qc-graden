@@ -1,0 +1,23 @@
+<view class="page-root {{theme}}">
+  <view class="hint">根据户型自由增减房间：添加「次卧」「卫生间」可重复，系统自动编号为 次卧 (2)、卫生间 (3)；也可重命名为「主卫 / 公卫 / 客卫」等语义名。</view>
+
+  <view wx:for="{{rooms}}" wx:key="id" class="card between">
+    <view style="font-weight:600;font-size:32rpx">{{item.name}}</view>
+    <view class="row" style="gap:16rpx">
+      <view class="btn-outline sm" bindtap="rename" data-id="{{item.id}}">重命名</view>
+      <view class="btn-danger sm" bindtap="remove" data-id="{{item.id}}">删除</view>
+    </view>
+  </view>
+
+  <view wx:if="{{rooms.length === 0 && !adding}}" class="empty">还没有房间，点击下方添加</view>
+
+  <view wx:if="{{adding}}" class="card">
+    <input class="input" style="margin-bottom:16rpx" placeholder="如：次卧、卫生间、书房" value="{{newName}}" bindinput="onAddInput" />
+    <view class="row" style="gap:16rpx">
+      <view class="btn-primary" style="flex:1" bindtap="confirmAdd">添加</view>
+      <view class="btn-outline" style="flex:1" bindtap="cancelAdd">取消</view>
+    </view>
+  </view>
+
+  <view wx:else class="card btn-outline" bindtap="startAdd">＋ 添加房间</view>
+</view>

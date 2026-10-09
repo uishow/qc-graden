@@ -1,0 +1,9 @@
+{
+  "name": "incrArticleView",
+  "version": "1.0.0",
+  "description": "文章阅读量自增（管理员上下文，绕过写安全规则）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}
