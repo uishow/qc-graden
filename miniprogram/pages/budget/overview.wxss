@@ -123,3 +123,18 @@
   background-color: var(--c-primary);
   border-color: var(--c-primary);
 }
+
+/* 费用总览·横向条形图（纯 CSS，不用 canvas：避免 wx:if 反复卸载 canvas 2d 损坏布局的坑） */
+.bar-row { padding: 8rpx 0; }
+.bar-top { margin-bottom: 6rpx; font-size: 26rpx; }
+.bar-track {
+  height: 10rpx;
+  background: var(--c-secondary-bg);
+  border-radius: 999rpx;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 10rpx;
+  background: var(--c-primary);
+  border-radius: 999rpx;
+}

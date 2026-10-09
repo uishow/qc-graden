@@ -164,20 +164,32 @@ Page({
     const stageRollups = (stages || [])
       .map((s) => ({ id: s.id, name: s.name, exp: expByStage[s.id] || 0, mat: matByStage[s.id] || 0 }))
       .filter((r) => r.exp > 0 || r.mat > 0)
-      .map((r) => ({ name: r.name, expText: fen2yuan(r.exp), matText: fen2yuan(r.mat) }))
+      .map((r) => ({ name: r.name, expText: fen2yuan(r.exp), matText: fen2yuan(r.mat), total: r.exp + r.mat }))
     const untaggedExp = list.reduce((s, e) => s + (e.stage_id ? 0 : Number(e.amount || 0)), 0)
     const untaggedMat = mat.reduce((s, m) => s + (m.stage_id ? 0 : Number(m.total_price || 0)), 0)
     if (untaggedExp > 0 || untaggedMat > 0) {
-      stageRollups.push({ name: '通用（未归类）', expText: fen2yuan(untaggedExp), matText: fen2yuan(untaggedMat) })
+      stageRollups.push({ name: '通用（未归类）', expText: fen2yuan(untaggedExp), matText: fen2yuan(untaggedMat), total: untaggedExp + untaggedMat })
     }
+    // 条形图占比：相对组内最大值，保底 3% 保证可见（纯 CSS 条，不用 canvas）
+    const stageMax = Math.max(0, ...stageRollups.map((r) => r.total))
+    stageRollups.forEach((r) => { r.pct = stageMax ? Math.max(3, Math.round((r.total / stageMax) * 100)) : 0 })
 
     // 费用总览·按材料类型维度（只计已购材料，与已花费口径一致）
     const MAT_CATS = ['主材', '辅材', '家具', '家电', '软装']
     const matTypeTotals = MAT_CATS
       .map((c) => ({ name: c, total: purchasedMat.filter((m) => m.category === c).reduce((s, m) => s + Number(m.total_price || 0), 0) }))
       .filter((x) => x.total > 0)
-      .map((x) => ({ name: x.name, text: fen2yuan(x.total) }))
+      .map((x) => ({ name: x.name, text: fen2yuan(x.total), total: x.total }))
+    const matTypeMax = Math.max(0, ...matTypeTotals.map((x) => x.total))
+    matTypeTotals.forEach((x) => { x.pct = matTypeMax ? Math.max(3, Math.round((x.total / matTypeMax) * 100)) : 0 })
     const matPendingTotal = Math.max(0, mat.reduce((s, m) => s + Number(m.total_price || 0), 0) - matTotal)
+
+    // 按花费类目：仅人工/设计/其他/订金·定金（材料由材料清单汇总，不再单列，杜绝重复）
+    const typeSumArr = ['labor', 'design', 'deposit', 'other']
+      .filter((t) => sums[t])
+      .map((t) => ({ name: TYPE_NAMES[t], text: fen2yuan(sums[t]), total: sums[t] }))
+    const typeMax = Math.max(0, ...typeSumArr.map((x) => x.total))
+    typeSumArr.forEach((x) => { x.pct = typeMax ? Math.max(3, Math.round((x.total / typeMax) * 100)) : 0 })
 
     this.setData({
       empty: false,
@@ -185,10 +197,8 @@ Page({
       spentText: fen2yuan(spent),
       remainText: fen2yuan(budget - spent),
       spentPercent: budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0,
-      // 按花费类目：仅人工/设计/其他/订金·定金（材料由材料清单汇总，不再单列，杜绝重复）
-      typeSums: ['labor', 'design', 'deposit', 'other']
-        .filter((t) => sums[t])
-        .map((t) => ({ name: TYPE_NAMES[t], text: fen2yuan(sums[t]) })),
+      // 按花费类目条形图数据（typeSumArr 已含 pct）
+      typeSums: typeSumArr,
       recent: list.map((e) => ({
         ...e,
         typeName: TYPE_NAMES[e.type] || '其他',

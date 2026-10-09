@@ -33,9 +33,12 @@
       </view>
       <view class="card">
         <view wx:if="{{stageRollups.length === 0}}" class="muted">还没有按阶段归类的花费/材料（记一笔或加材料时可选「所属阶段」）</view>
-        <view wx:for="{{stageRollups}}" wx:key="name" class="between" style="padding:8rpx 0">
-          <view>{{item.name}}</view>
-          <view class="muted">花费 {{item.expText}} · 材料 {{item.matText}}</view>
+        <view wx:for="{{stageRollups}}" wx:key="name" class="bar-row">
+          <view class="between bar-top">
+            <view>{{item.name}}</view>
+            <view class="muted">花费 {{item.expText}} · 材料 {{item.matText}}</view>
+          </view>
+          <view class="bar-track"><view class="bar-fill" style="width:{{item.pct}}%"></view></view>
         </view>
       </view>
 
@@ -44,9 +47,12 @@
       </view>
       <view class="card">
         <view wx:if="{{typeSums.length === 0}}" class="muted">还没有非材料类花费（材料支出在「材料清单」登记，自动计入预算）</view>
-        <view wx:for="{{typeSums}}" wx:key="name" class="between" style="padding:8rpx 0">
-          <view>{{item.name}}</view>
-          <view class="accent">{{item.text}}</view>
+        <view wx:for="{{typeSums}}" wx:key="name" class="bar-row">
+          <view class="between bar-top">
+            <view>{{item.name}}</view>
+            <view class="accent">{{item.text}}</view>
+          </view>
+          <view class="bar-track"><view class="bar-fill" style="width:{{item.pct}}%"></view></view>
         </view>
       </view>
 
@@ -55,9 +61,12 @@
       </view>
       <view class="card">
         <view wx:if="{{matTypeTotals.length === 0}}" class="muted">暂无材料</view>
-        <view wx:for="{{matTypeTotals}}" wx:key="name" class="between" style="padding:8rpx 0">
-          <view>{{item.name}}</view>
-          <view class="accent">{{item.text}}</view>
+        <view wx:for="{{matTypeTotals}}" wx:key="name" class="bar-row">
+          <view class="between bar-top">
+            <view>{{item.name}}</view>
+            <view class="accent">{{item.text}}</view>
+          </view>
+          <view class="bar-track"><view class="bar-fill" style="width:{{item.pct}}%"></view></view>
         </view>
       </view>
     </block>
