@@ -12,6 +12,7 @@ const { today, shortDate } = require('./format')
 const { BELONG_WHOLEHOUSE } = require('./wholehouse')
 
 const EXPENSE_TYPE_NAMES = { material: '材料', labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }
+const MAT_STATUS_NAME = { to_buy: '待购买', bought: '已购买', on_site: '已进场' }
 
 // 文件名前缀 + 空数据提示，按 scope 区分，让导出内容一目了然对应当前页
 const SCOPE_NAMES = {
@@ -33,15 +34,28 @@ function csvCell(v) {
   return s
 }
 
+// 金额单位为分，转元保留两位小数；非数字（花费行无计划/偏差）留空
+function fmtFen(v) {
+  return typeof v === 'number' ? (v / 100).toFixed(2) : ''
+}
+// 偏差：正=超支，负=结余，0/非数字留空（与页面「超支/结余」文案一致）
+function fmtDev(v) {
+  if (typeof v !== 'number' || v === 0) return ''
+  return (v > 0 ? '超支 ' : '结余 ') + (Math.abs(v) / 100).toFixed(2)
+}
+
 function buildCsv(rows) {
-  const header = ['类别', '名称/备注', '金额(元)', '类目', '归属', '所属阶段', '日期', '规格']
+  const header = ['类别', '名称/备注', '金额(元)', '类目', '状态', '计划价(元)', '偏差(元)', '归属', '所属阶段', '日期', '规格']
   const lines = [header.map(csvCell).join(',')]
   rows.forEach((r) => {
     lines.push([
       r.kind,
       r.name,
-      (r.amount / 100).toFixed(2),
+      fmtFen(r.amount),
       r.category,
+      r.status,
+      fmtFen(r.planned),
+      fmtDev(r.deviation),
       r.belong,
       r.stage,
       r.date,
@@ -149,6 +163,9 @@ async function runExport(cloud, projectId, scope) {
           name: e.remark || EXPENSE_TYPE_NAMES[e.type] || '其他',
           amount: Number(e.amount || 0),
           category: EXPENSE_TYPE_NAMES[e.type] || '其他',
+          status: '',
+          planned: '',
+          deviation: '',
           belong: e.belong === BELONG_WHOLEHOUSE ? '全屋定制' : '',
           stage: e.stage_id ? (stageMap[e.stage_id] || '通用') : '通用',
           date: e.pay_date || '',
@@ -160,11 +177,18 @@ async function runExport(cloud, projectId, scope) {
     if (scope !== 'expenses') {
       ;(materials || []).forEach((m) => {
         const spec = [m.brand || '', `${m.quantity || ''}${m.unit || ''}`].join(' ').trim()
+        const total = Number(m.total_price || 0)
+        // 计划价：有 planned_price 用计划价（已定格），无则回退 total_price（老数据）
+        const planPrice = Number(m.planned_price != null ? m.planned_price : total)
+        const dev = total - planPrice // 实际-计划，正=超支
         rows.push({
           kind: '材料',
           name: m.name || '',
-          amount: Number(m.total_price || 0),
+          amount: total,
           category: m.category || '其他',
+          status: MAT_STATUS_NAME[m.status] || m.status || '',
+          planned: planPrice,
+          deviation: dev,
           belong: m.belong === BELONG_WHOLEHOUSE ? '全屋定制' : '',
           stage: m.stage_id ? (stageMap[m.stage_id] || '通用') : '通用',
           date: shortDate(m.created_at),
