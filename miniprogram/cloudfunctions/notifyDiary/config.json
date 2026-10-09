@@ -1,0 +1,10 @@
+{
+  "timeout": 20,
+  "memorySize": 256,
+  "installDependency": true,
+  "permissions": {
+    "openapi": [
+      "subscribeMessage.send"
+    ]
+  }
+}

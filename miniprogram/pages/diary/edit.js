@@ -2,6 +2,9 @@ const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
 const { today } = require('../../utils/format')
 
+// 订阅消息模板：家人新日记提醒（后台公共模板，字段 thing1作者/thing2内容/time3时间/thing5备注）
+const SUBSCRIBE_TMPL_ID = 'd7KlYUn-ZiAtiSr3kuRkiD2qYbYygi0T_6kLxYTMMTk'
+
 Page({
   data: {
     theme: 'theme-a',
@@ -111,6 +114,11 @@ Page({
       wx.showToast({ title: '请填写标题', icon: 'none' })
       return
     }
+    // 新建日记时顺手请求订阅授权（一次性订阅：授权一次=可收一条提醒）。
+    // 必须在 tap 同步链路里调用；用户选「总是允许」后不再弹，拒绝也不影响保存。
+    if (!id && wx.requestSubscribeMessage) {
+      wx.requestSubscribeMessage({ tmplIds: [SUBSCRIBE_TMPL_ID] })
+    }
     if (this.data.saving) return
     this.setData({ saving: true })
     try {
@@ -163,6 +171,10 @@ Page({
           action: 'create', new_version: 1,
           created_at: new Date().toISOString(),
         })
+        // 触发式通知其他成员（未订阅/发送失败均静默，不影响保存流程）
+        wx.cloud.callFunction({ name: 'notifyDiary', data: { diaryId: data[0].id } })
+          .then(() => {})
+          .catch(() => {})
       }
       wx.showToast({ title: '已保存' })
       setTimeout(() => wx.navigateBack(), 600)

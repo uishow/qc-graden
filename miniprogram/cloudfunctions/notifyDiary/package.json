@@ -1,0 +1,9 @@
+{
+  "name": "notifyDiary",
+  "version": "1.0.0",
+  "description": "家人新日记订阅提醒（方案A）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}
