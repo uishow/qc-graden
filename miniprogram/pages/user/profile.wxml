@@ -57,21 +57,14 @@
       <view class="muted">{{aiKeyTail ? '已配置 · 尾' + aiKeyTail + ' ›' : '未配置 · ›'}}</view>
     </view>
 
-    <view style="font-weight:600;margin:32rpx 0 12rpx">外观</view>
-    <view class="card">
-      <view class="between" style="padding:12rpx 0" bindtap="setThemeA">
-        <view class="row" style="gap:16rpx">
-          <view style="width:40rpx;height:40rpx;border-radius:8rpx;background:#8C5A3B"></view>
-          <view>中古暖调</view>
-        </view>
-        <view wx:if="{{theme === 'theme-a'}}" class="accent">✓</view>
+    <view class="card between">
+      <view class="row" style="gap:16rpx">
+        <view style="font-size:30rpx">🎨</view>
+        <view>外观</view>
       </view>
-      <view class="between" style="padding:12rpx 0" bindtap="setThemeB">
-        <view class="row" style="gap:16rpx">
-          <view style="width:40rpx;height:40rpx;border-radius:8rpx;background:#3E3E42"></view>
-          <view>轻奢冷调</view>
-        </view>
-        <view wx:if="{{theme === 'theme-b'}}" class="accent">✓</view>
+      <view class="row" style="gap:20rpx">
+        <view style="width:44rpx;height:44rpx;border-radius:50%;background:#8C5A3B;{{theme==='theme-a'?'box-shadow:0 0 0 3rpx var(--c-primary);':''}}" bindtap="setThemeA"></view>
+        <view style="width:44rpx;height:44rpx;border-radius:50%;background:#3E3E42;{{theme==='theme-b'?'box-shadow:0 0 0 3rpx var(--c-primary);':''}}" bindtap="setThemeB"></view>
       </view>
     </view>
 

@@ -45,12 +45,19 @@
           <view class="pie-legend-val">{{item.text}} · {{item.pct}}%</view>
         </view>
       </view>
-      <view class="between" style="padding:8rpx 0;border-top:1rpx solid var(--c-card-border);margin-top:8rpx">
-        <view>
-          <view class="muted">材料清单合计（已购 {{matPurchasedText}} · 待购 {{matPendingText}}）</view>
-          <view class="muted" style="font-size:22rpx">已花费只计入已购部分，待购推进后自动计入</view>
+      <view style="padding:8rpx 0;border-top:1rpx solid var(--c-card-border);margin-top:8rpx">
+        <view class="between">
+          <view style="font-weight:600">采购计划</view>
+          <view class="muted">已执行 {{matExecPercent}}%</view>
         </view>
-        <view class="accent">{{materialTotalText}}</view>
+        <view style="height:14rpx;background:var(--c-secondary-bg);border-radius:999rpx;margin:10rpx 0">
+          <view style="height:14rpx;width:{{matExecPercent}}%;background:var(--c-accent);border-radius:999rpx"></view>
+        </view>
+        <view class="between">
+          <view class="muted">已采购（执行）{{matPurchasedText}}</view>
+          <view class="muted">待采购（计划）{{matPendingText}}</view>
+        </view>
+        <view class="muted" style="font-size:22rpx;margin-top:6rpx">计划总额 {{materialTotalText}} · 已花费只计入已购部分，待购推进后自动计入</view>
       </view>
     </view>
 

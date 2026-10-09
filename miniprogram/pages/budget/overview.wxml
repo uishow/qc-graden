@@ -28,6 +28,21 @@
         </view>
       </view>
 
+      <view class="card">
+        <view class="between">
+          <view style="font-weight:600">采购计划</view>
+          <view class="muted">已执行 {{matExecPercent}}%</view>
+        </view>
+        <view style="height:14rpx;background:var(--c-secondary-bg);border-radius:999rpx;margin:12rpx 0">
+          <view style="height:14rpx;width:{{matExecPercent}}%;background:var(--c-accent);border-radius:999rpx"></view>
+        </view>
+        <view class="between">
+          <view class="muted">已采购（执行）{{matPurchasedText}}</view>
+          <view class="muted">待采购（计划）{{matPendingText}}</view>
+        </view>
+        <view class="muted" style="font-size:22rpx;margin-top:6rpx">计划总额 {{matTotalText}} · 已花费只计入已购部分，待购推进后自动计入</view>
+      </view>
+
       <view class="section-head">
         <view class="section-title">按阶段</view>
       </view>
@@ -81,12 +96,18 @@
         </view>
       </view>
 
-      <view class="card between">
-        <view>
-          <view style="font-weight:600">材料合计</view>
-          <view class="muted" style="font-size:22rpx;margin-top:4rpx">已购 {{matPurchasedText}}（计入已花费） · 待购 {{matPendingText}}</view>
+      <view class="card">
+        <view class="between">
+          <view>
+            <view style="font-weight:600">材料合计</view>
+            <view class="muted" style="font-size:22rpx;margin-top:4rpx">已购 {{matPurchasedText}}（计入已花费） · 待购 {{matPendingText}}</view>
+          </view>
+          <view class="accent" style="font-size:36rpx">{{matTotalText}}</view>
         </view>
-        <view class="accent" style="font-size:36rpx">{{matTotalText}}</view>
+        <view style="height:14rpx;background:var(--c-secondary-bg);border-radius:999rpx;margin-top:12rpx">
+          <view style="height:14rpx;width:{{matExecPercent}}%;background:var(--c-accent);border-radius:999rpx"></view>
+        </view>
+        <view class="muted" style="font-size:22rpx;margin-top:6rpx">采购计划执行率 {{matExecPercent}}%（待购 = 计划项，已购 = 对计划的执行）</view>
       </view>
 
       <view wx:if="{{matEmpty}}" class="card muted">清单是空的，点右上角「＋ 加材料」把要买的瓷砖、地板、洁具一件件加进来</view>

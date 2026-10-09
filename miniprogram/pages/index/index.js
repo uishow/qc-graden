@@ -29,6 +29,7 @@ Page({
     spentPercent: 0,
     pieSlices: [],
     materialTotalText: '¥0.00',
+    matExecPercent: 0, // 采购计划执行率：已购 / 材料清单总额
     latestDiaries: [],
     noProject: false,
     showJoin: false,
@@ -138,6 +139,7 @@ Page({
       }))
     const materialTotal = mat.reduce((sum, m) => sum + Number(m.total_price || 0), 0)
     const matPendingTotal = Math.max(0, materialTotal - purchasedMatTotal)
+    const matExecPercent = materialTotal > 0 ? Math.round((purchasedMatTotal / materialTotal) * 100) : 0
 
     this.setData({
       project,
@@ -154,6 +156,7 @@ Page({
       materialTotalText: fen2yuan(materialTotal),
       matPurchasedText: fen2yuan(purchasedMatTotal),
       matPendingText: fen2yuan(matPendingTotal),
+      matExecPercent,
       latestDiaries: diaries || [],
     }, () => this.drawPie())
   },

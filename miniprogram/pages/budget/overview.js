@@ -32,6 +32,7 @@ Page({
     // 材料清单
     matEmpty: true,
     matTotalText: '¥0.00',
+    matExecPercent: 0, // 采购计划执行率：已购 / 材料清单总额
     matGroups: [],
     // 全屋定制（阶段进度卡 + 归集）
     wholeHouse: { has: false, name: '', status: '', statusName: '', id: '' },
@@ -244,6 +245,8 @@ Page({
     const matTypeMax = Math.max(0, ...matTypeTotals.map((x) => x.total))
     matTypeTotals.forEach((x) => { x.pct = matTypeMax ? Math.max(3, Math.round((x.total / matTypeMax) * 100)) : 0 })
     const matPendingTotal = Math.max(0, mat.reduce((s, m) => s + Number(m.total_price || 0), 0) - matTotal)
+    const matPlanTotal = mat.reduce((s, m) => s + Number(m.total_price || 0), 0)
+    const matExecPercent = matPlanTotal > 0 ? Math.round((matTotal / matPlanTotal) * 100) : 0
 
     // 按花费类目：仅人工/设计/其他/订金·定金（材料由材料清单汇总，不再单列，杜绝重复）
     const typeSumArr = ['labor', 'design', 'deposit', 'other']
@@ -270,6 +273,7 @@ Page({
       matTotalText: fen2yuan(mat.reduce((s, m) => s + Number(m.total_price || 0), 0)),
       matPurchasedText: fen2yuan(matTotal),
       matPendingText: fen2yuan(matPendingTotal),
+      matExecPercent,
       matGroups,
       wholeHouse,
       whMatTotalText: fen2yuan(whMatTotal),
