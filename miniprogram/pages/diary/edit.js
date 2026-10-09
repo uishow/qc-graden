@@ -47,6 +47,15 @@ Page({
           stageIndex: (this.data.stages || []).findIndex((s) => s.id === d.stage_id),
         })
       }
+    } else {
+      // AI 周报草稿：仅新建模式预填（「记一篇 → AI 帮我写本周进展」传入），读后即删
+      try {
+        const draft = wx.getStorageSync('weeklyDraft:' + projectId)
+        if (draft && draft.title) {
+          this.setData({ title: draft.title, content: draft.content || '' })
+          wx.removeStorageSync('weeklyDraft:' + projectId)
+        }
+      } catch (e) { /* 无草稿或存储不可用，正常空白新建 */ }
     }
   },
 

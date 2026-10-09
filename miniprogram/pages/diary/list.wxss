@@ -23,26 +23,3 @@
 .btn-add:active {
   opacity: 0.85;
 }
-
-/* 本周进展按钮：强调色软底胶囊（与右侧实心「＋记一篇」形成主次） */
-.digest-btn {
-  font-size: 26rpx;
-  color: var(--c-accent);
-  background: var(--c-accent-bg);
-  border-radius: 999rpx;
-  padding: 10rpx 24rpx;
-  font-weight: 600;
-}
-.digest-btn:active {
-  opacity: 0.85;
-}
-
-/* 周报卡片：左侧强调色竖条 + 底部生成时间与统计脚注 */
-.digest-card {
-  border-left: 8rpx solid var(--c-accent);
-}
-.digest-foot {
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  line-height: 1.6;
-}

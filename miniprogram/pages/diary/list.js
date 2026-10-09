@@ -8,10 +8,6 @@ Page({
     theme: 'theme-a',
     groups: [],
     empty: false,
-    digestText: '',
-    digestStats: '',
-    digestTime: '',
-    digestLoading: false,
   },
 
   async onShow() {
@@ -20,7 +16,6 @@ Page({
     const session = await app.ready()
     if (!session) return
     await this.load()
-    this.restoreDigest() // 恢复本周已生成的进展（重编译/重进不丢）
     this.startWatch() // M3·L1 试点：日记时间线实时监听（真机验证 30s 双机可见）
   },
 
@@ -109,36 +104,34 @@ Page({
     }
   },
 
-  // —— V1.3 周报摘要（手动触发 + 本周本地缓存）——
-  // 缓存 key 按项目 + 本周周一日期：跨周自动失效，重新编译/重进页面都能恢复显示。
-  weekKey() {
-    const d = new Date()
-    const off = (d.getDay() + 6) % 7 // 周一为本周起点
-    d.setDate(d.getDate() - off)
-    const p = (n) => (n < 10 ? '0' + n : '' + n)
-    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
-  },
-
-  restoreDigest() {
-    const projectId = store.getCurrentProjectId()
-    if (!projectId) return
-    try {
-      const c = wx.getStorageSync('digest:' + projectId)
-      if (c && c.week === this.weekKey() && c.text) {
-        this.setData({ digestText: c.text, digestStats: c.stats || '', digestTime: c.time || '' })
-      }
-    } catch (e) { /* 缓存不可用则忽略 */ }
-  },
-
-  async genWeekly() {
-    if (this.data.digestLoading) return
+  // —— V1.3 周报：融入「记一篇」。AI 生成后作为日记草稿进编辑页，可改可存，存了即时间线一篇日记 ——
+  goAdd() {
     const projectId = store.getCurrentProjectId()
     if (!projectId) {
       wx.showToast({ title: '请先在首页创建或选择项目', icon: 'none' })
       return
     }
-    this.setData({ digestLoading: true })
-    // showLoading/showToast 共用原生单例：hideLoading 必须在 showToast 之前
+    wx.showActionSheet({
+      itemList: ['✍️ 自己写', '🤖 AI 帮我写本周进展'],
+      success: (res) => {
+        if (res.tapIndex === 0) this.goEdit()
+        else this.genWeeklyDraft(projectId)
+      },
+    })
+  },
+
+  weekRangeText() {
+    const p = (n) => (n < 10 ? '0' + n : '' + n)
+    const fmt = (d) => (d.getMonth() + 1) + '.' + p(d.getDate())
+    const start = new Date()
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7)) // 本周一
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6) // 本周日
+    return fmt(start) + '-' + fmt(end)
+  },
+
+  async genWeeklyDraft(projectId) {
+    wx.showLoading({ title: 'AI 生成中…', mask: true })
     let result = null
     try {
       const res = await wx.cloud.callFunction({ name: 'weeklyDigest', data: { projectId } })
@@ -148,33 +141,25 @@ Page({
       const ed = e || {}
       const detail = String(ed.errMsg || ed.errCode || ed.message || '').slice(0, 80)
       result = { ok: false, message: '调用失败：' + (detail || '网络异常') }
-    } finally {
-      this.setData({ digestLoading: false })
     }
+    // showLoading/showToast 共用原生单例：先 hideLoading 再 toast
+    wx.hideLoading()
     if (!result || !result.ok) {
       wx.showToast({ title: (result && result.message) || '生成失败，请重试', icon: 'none' })
       return
     }
-    const d = new Date()
-    const p = (n) => (n < 10 ? '0' + n : '' + n)
-    const time = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + p(d.getHours()) + ':' + p(d.getMinutes())
-    this.setData({
-      digestText: result.summary,
-      digestStats: result.stats || '',
-      digestTime: time,
-    })
+    const content = [result.summary, result.stats].filter(Boolean).join('\n\n')
     try {
-      wx.setStorageSync('digest:' + projectId, { week: this.weekKey(), text: result.summary, stats: result.stats || '', time })
-    } catch (e) { /* 存不上就算了，只是缓存 */ }
+      // 草稿经storage传给编辑页（navigateTo 不便带长文本参数），编辑页预填后立即消费
+      wx.setStorageSync('weeklyDraft:' + projectId, {
+        title: '本周进展 ' + this.weekRangeText(),
+        content,
+      })
+    } catch (e2) { /* 存不上则编辑页拿不到预填，仍可手写 */ }
     if (result.ai === false && result.aiError) {
-      wx.showToast({ title: 'AI 未生成，已用统计兜底', icon: 'none' })
+      wx.showToast({ title: 'AI 暂不可用，已用统计兜底', icon: 'none' })
     }
-  },
-
-  closeDigest() {
-    this.setData({ digestText: '', digestTime: '' })
-    // 「收起」= 明确不想看，缓存一并清掉，避免重编译后又冒出来
-    try { wx.removeStorageSync('digest:' + store.getCurrentProjectId()) } catch (e) {}
+    wx.navigateTo({ url: '/pages/diary/edit' })
   },
 
   goDetail(e) {
