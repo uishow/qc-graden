@@ -8,6 +8,8 @@
   --c-accent-bg: #F6EFE2;
   --c-success: #3F7A4F;
   --c-success-bg: #E5F0E8;
+  --c-danger: #C0492F;
+  --c-danger-bg: #F7E6E0;
   --c-text: #3A322B;
   --c-text-2: #8A7E72;
   --c-card: #FFFFFF;
@@ -22,6 +24,8 @@
   --c-accent-bg: #F4EFE6;
   --c-success: #4A8E63;
   --c-success-bg: #E7F1EC;
+  --c-danger: #C0492F;
+  --c-danger-bg: #F7E6E0;
   --c-text: #232326;
   --c-text-2: #8B8B90;
   --c-card: #FFFFFF;
@@ -55,6 +59,11 @@
 
 .muted { color: var(--c-text-2); font-size: 26rpx; }
 .accent { color: var(--c-accent); font-weight: 600; }
+
+/* 材料明细·计划偏差标记：超支(红)/结余(绿) */
+.dev-tag { display: inline-flex; align-items: center; font-size: 22rpx; line-height: 1; padding: 6rpx 14rpx; border-radius: 999rpx; font-weight: 600; }
+.dev-over { color: var(--c-danger); background: var(--c-danger-bg); }
+.dev-save { color: var(--c-success); background: var(--c-success-bg); }
 
 .btn-primary {
   background: var(--c-primary);

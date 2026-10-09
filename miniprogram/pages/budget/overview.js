@@ -187,7 +187,20 @@ Page({
         ...s,
         items: mat
           .filter((m) => m.status === s.key)
-          .map((m) => ({ ...m, totalText: fen2yuan(m.total_price), attCount: (m.attachments || []).length })),
+          .map((m) => {
+            const planPrice = planOf(m)
+            const dev = Number(m.total_price || 0) - planPrice // 实际-计划，正=超支
+            const devType = dev > 0 ? 'over' : (dev < 0 ? 'save' : 'none')
+            const devTag = devType === 'over' ? '超支 ' + fen2yuan(dev)
+              : (devType === 'save' ? '结余 ' + fen2yuan(-dev) : '')
+            return {
+              ...m,
+              totalText: fen2yuan(m.total_price),
+              planText: fen2yuan(planPrice),
+              devType, devTag,
+              attCount: (m.attachments || []).length,
+            }
+          }),
       }))
 
     // 全屋定制：并行环节，不再是线性固定阶段。支持用户在看板建多个全屋定制子阶段
@@ -208,11 +221,19 @@ Page({
     const whMatTotal = whMat.reduce((s, m) => s + Number(m.total_price || 0), 0)
     const whExpTotal = whExp.reduce((s, e) => s + Number(e.amount || 0), 0)
     const whItems = [
-      ...whMat.map((m) => ({
-        k: 'm' + m.id, kind: 'material', id: m.id, kindName: '材料',
-        title: m.name, sub: m.sub || '全屋定制', text: fen2yuan(m.total_price),
-        attCount: (m.attachments || []).length,
-      })),
+      ...whMat.map((m) => {
+        const planPrice = planOf(m)
+        const dev = Number(m.total_price || 0) - planPrice
+        const devType = dev > 0 ? 'over' : (dev < 0 ? 'save' : 'none')
+        const devTag = devType === 'over' ? '超支 ' + fen2yuan(dev)
+          : (devType === 'save' ? '结余 ' + fen2yuan(-dev) : '')
+        return {
+          k: 'm' + m.id, kind: 'material', id: m.id, kindName: '材料',
+          title: m.name, sub: m.sub || '全屋定制', text: fen2yuan(m.total_price),
+          planText: fen2yuan(planPrice), devType, devTag,
+          attCount: (m.attachments || []).length,
+        }
+      }),
       ...whExp.map((e) => ({
         k: 'e' + e.id, kind: 'expense', id: e.id, kindName: TYPE_NAMES[e.type] || '其他',
         title: e.remark || '花费', sub: e.pay_date, text: fen2yuan(e.amount),
@@ -278,7 +299,7 @@ Page({
       matPurchasedText: fen2yuan(matTotal),
       matPendingText: fen2yuan(pendingPlanTotal),
       matExecPercent,
-      matPlanDeviationText: matPlanDeviation === 0 ? '' : (matPlanDeviation > 0 ? '超支 ' : '节省 ') + fen2yuan(Math.abs(matPlanDeviation)),
+      matPlanDeviationText: matPlanDeviation === 0 ? '' : (matPlanDeviation > 0 ? '超支 ' : '结余 ') + fen2yuan(Math.abs(matPlanDeviation)),
       matGroups,
       wholeHouse,
       whMatTotalText: fen2yuan(whMatTotal),

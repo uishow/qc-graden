@@ -160,7 +160,7 @@ Page({
       matPurchasedText: fen2yuan(purchasedMatTotal),
       matPendingText: fen2yuan(pendingPlanTotal),
       matExecPercent,
-      matPlanDeviationText: matPlanDeviation === 0 ? '' : (matPlanDeviation > 0 ? '超支 ' : '节省 ') + fen2yuan(Math.abs(matPlanDeviation)),
+      matPlanDeviationText: matPlanDeviation === 0 ? '' : (matPlanDeviation > 0 ? '超支 ' : '结余 ') + fen2yuan(Math.abs(matPlanDeviation)),
       latestDiaries: diaries || [],
     }, () => this.drawPie())
   },

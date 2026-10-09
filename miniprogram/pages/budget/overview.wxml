@@ -120,6 +120,7 @@
           <view class="between">
             <view style="font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:12rpx">{{item.name}}</view>
             <view class="accent" style="flex-shrink:0">{{item.totalText}}</view>
+            <view wx:if="{{item.devType !== 'none'}}" class="dev-tag {{item.devType === 'over' ? 'dev-over' : 'dev-save'}}" style="flex-shrink:0;margin-left:12rpx">{{item.devTag}}</view>
           </view>
           <view class="row" style="gap:12rpx;margin-top:8rpx">
             <view class="muted" style="flex:1;min-width:0;font-size:24rpx;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{item.category}} · {{item.brand || '未填品牌'}} · x{{item.quantity}}{{item.unit || ''}}<block wx:if="{{item.attCount}}"> · 附件{{item.attCount}}</block></view>
@@ -127,6 +128,7 @@
             <view wx:if="{{item.status !== 'on_site'}}" class="slim-del" catchtap="advanceMaterialStatus"
               data-id="{{item.id}}" data-status="{{item.status}}">推进 →</view>
           </view>
+          <view wx:if="{{item.devType !== 'none'}}" class="muted" style="font-size:22rpx;margin-top:6rpx">计划 {{item.planText}}</view>
         </view>
       </block>
     </block>
@@ -202,8 +204,11 @@
       <view wx:if="{{whItems.length === 0}}" class="card muted">还没有归入全屋定制的材料/花费：点上面「＋」添加，或给已有条目把「归属」选为全屋定制</view>
       <view wx:for="{{whItems}}" wx:key="k" class="card slim slim-row" bindtap="goEditWhItem" data-kind="{{item.kind}}" data-id="{{item.id}}">
         <view class="slim-main">
-          <text class="slim-title">{{item.title}}</text>
-          <text class="slim-meta">{{item.kindName}} · {{item.sub}}<block wx:if="{{item.attCount}}"> · 附件{{item.attCount}}</block></text>
+          <view class="between">
+            <text class="slim-title">{{item.title}}</text>
+            <view wx:if="{{item.devType !== 'none'}}" class="dev-tag {{item.devType === 'over' ? 'dev-over' : 'dev-save'}}" style="flex-shrink:0;margin-left:12rpx">{{item.devTag}}</view>
+          </view>
+          <text class="slim-meta">{{item.kindName}} · {{item.sub}}<block wx:if="{{item.attCount}}"> · 附件{{item.attCount}}</block><block wx:if="{{item.devType !== 'none'}}"> · 计划 {{item.planText}}</block></text>
         </view>
         <text class="slim-amount">{{item.text}}</text>
       </view>
