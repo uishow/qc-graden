@@ -30,16 +30,28 @@ exports.main = async (event) => {
   let rows = []
   try {
     const col = db.collection('app_feedback')
-    const r = scope === 'all'
-      ? await col.order('created_at', { ascending: false }).limit(100).get()
-      : await col.where({ openid }).order('created_at', { ascending: false }).limit(100).get()
-    rows = r.data || []
+    if (scope === 'all') {
+      const r = await col.order('created_at', { ascending: false }).limit(100).get()
+      rows = r.data || []
+    } else {
+      // self 视图：先按业务字段 openid 查，0 条时再按云开发自动加的 _openid 查一次取并集
+      // 背景：2026-10-15 用户场景是云端有数据但 list=[]，怀疑字段名（业务 openid vs 系统 _openid）
+      //   或 openid 值在不同端不一致；取两次能最大限度兜底
+      const r1 = await col.where({ openid }).order('created_at', { ascending: false }).limit(100).get()
+      rows = r1.data || []
+      if (rows.length === 0) {
+        const r2 = await col.where({ _openid: openid }).order('created_at', { ascending: false }).limit(100).get()
+        rows = r2.data || []
+        console.log('[feedbackList] self fallback to _openid, hitCount:', rows.length)
+      }
+    }
     // ★ 2026-10-15 诊断：打出当前查询条件 + 命中行数 + 前 1 行的 openid 比对
     console.log('[feedbackList] query', JSON.stringify({
       wxOpenid: openid,
       scope, requested,
       mgr, hitCount: rows.length,
       firstHitOpenid: rows[0] && rows[0].openid,
+      firstHit_idOpenid: rows[0] && rows[0]._openid,
     }))
   } catch (e) {
     // 集合不存在/无读权限：兜底返回空（首条反馈提交时集合才会被创建）

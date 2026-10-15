@@ -166,18 +166,21 @@
               <text class="history-stars">
                 <text wx:for="{{5}}" wx:key="u{{index}}" class="h-star {{item.scores.usability > index ? 'h-star-on' : ''}}">★</text>
               </text>
+              <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.usability || 0}}分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">美观性</text>
               <text class="history-stars">
                 <text wx:for="{{5}}" wx:key="a{{index}}" class="h-star {{item.scores.aesthetics > index ? 'h-star-on' : ''}}">★</text>
               </text>
+              <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.aesthetics || 0}}分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">功能性</text>
               <text class="history-stars">
                 <text wx:for="{{5}}" wx:key="f{{index}}" class="h-star {{item.scores.functionality > index ? 'h-star-on' : ''}}">★</text>
               </text>
+              <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.functionality || 0}}分</text>
             </view>
           </view>
           <view wx:if="{{item.comment}}" class="history-comment">{{item.comment}}</view>
@@ -256,16 +259,14 @@
           <view wx:if="{{!detailItem.system && !detailItem.app_version && !detailItem.platform && historyScope !== 'all'}}" class="muted">未记录</view>
         </view>
 
-        <!-- 来源标记：本地缓存 vs 云端真数据 -->
+        <!-- 来源标记：本地缓存 vs 云端真数据
+             记录 ID 不再展示（云端 _id 是 24 位 hex，本地 id 形如 local-2026-10-15T...，
+             用户看不懂且占版面；定位/排查由控制台日志/集合 _id 内部完成） -->
         <view class="detail-section">
           <view class="detail-meta-row">
             <text class="muted">来源</text>
             <text wx:if="{{detailItem.fromLocal}}" style="color:var(--c-text-2)">本地缓存（云端暂无此条，多为刚提交；不会上传）</text>
             <text wx:else style="color:var(--c-secondary)">云端</text>
-          </view>
-          <view wx:if="{{detailItem.id}}" class="detail-meta-row">
-            <text class="muted">记录 ID</text>
-            <text style="font-family:monospace;font-size:22rpx;word-break:break-all">{{detailItem.id}}</text>
           </view>
         </view>
       </view>
