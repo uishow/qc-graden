@@ -103,9 +103,6 @@
   display: flex; gap: 16rpx;
   margin-top: 18rpx;
 }
-/* 主操作行：确认写入占整行，避免三按钮挤一行被压成竖排换字 */
-.entry-actions-main { margin-top: 14rpx; }
-.entry-actions-main .entry-btn { width: 100%; }
 .entry-btn {
   flex: 1; text-align: center;
   font-size: 26rpx; font-weight: 500;
@@ -122,13 +119,17 @@
 }
 .entry-ok:active { opacity: 0.85; }
 .entry-cancel:active { opacity: 0.85; }
-/* 预览卡「修改」按钮：次强调，介于取消与确认之间 */
-.entry-edit {
-  background: var(--c-secondary-bg);
+/* 「修改」入口：标题右侧小链接（次操作不占底部按钮位，底部只留 取消|确认 两键） */
+.entry-edit-link {
+  flex-shrink: 0;
+  font-size: 24rpx;
   color: var(--c-primary);
   border: 1rpx solid var(--c-primary);
+  border-radius: 8rpx;
+  padding: 4rpx 14rpx;
+  margin-left: 12rpx;
 }
-.entry-edit:active { opacity: 0.85; }
+.entry-edit-link:active { opacity: 0.8; }
 
 /* —— Phase 3：引导式半屏编辑表单 ——
    .mask 显式四向归零钉底 + flex column end；.sheet flex column，
@@ -252,8 +253,9 @@
   padding: 18rpx 24rpx;
   font-size: 28rpx; line-height: 1.5;
   color: var(--c-text);
-  min-height: 44rpx;
-  max-height: 220rpx;
+  /* 默认 3 行高：录入长文本（自然语录入）一屏看得全，超出继续长高到 6 行封顶再内滚 */
+  min-height: 132rpx;
+  max-height: 300rpx;
 }
 .send-btn {
   flex-shrink: 0;

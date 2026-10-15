@@ -574,7 +574,8 @@ Page({
     const typeDecl = text.match(/(?:类型|类别)\s*(?:是|[:：])?\s*(人工|设计|订金|定金|材料|其他)/)
 
     // 金额：优先「数字元/块」，其次「花了500」「金额：500」「费用是200」（省略元）
-    const amtRe = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/
+    // alternation 长词放最左：「块钱」必须在「块」前，否则「300块钱」吃掉「块」漏下「钱」
+    const amtRe = /(\d+(?:\.\d+)?)\s*(?:元|块钱|块)/
     const m = text.match(amtRe) || text.match(/(?:花了|金额|费用)\s*(?:是|[:：])?\s*(\d+(?:\.\d+)?)/)
     if (!m) return null
     const amountFen = Math.round(Number(m[1]) * 100)
@@ -597,11 +598,14 @@ Page({
       remark = remark.replace(amtRe, ' ')
       remark = remark.replace(/(花了|金额|费用)\s*(?:是|[:：])?\s*(\d+(?:\.\d+)?)/g, ' ')
       remark = remark.replace(/(备注|说明|事由|类型|类别)\s*(?:是|[:：])?/g, ' ')
-      remark = remark.replace(/(人工|工钱|工人|师傅|设计|订金|定金|预付款|花费|支出|付款|付了|报销|开支|消费|记一笔|记一下|花)/g, ' ')
+      // 只剥离指令词/意图词/日期，保留领域词（设计师/定金等是备注本意）。
+      // 旧版把 设计|定金|师傅 一并剥掉，把「设计师的定金」切碎成「是 师 的 钱」（2026-10-15 用户二轮反馈）
+      remark = remark.replace(/(录入|添加|登记|记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了)/g, ' ')
       remark = remark.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
       this._knownStageNames().filter((n) => n.length >= 2).forEach((n) => { remark = remark.split(n).join(' ') })
       this._knownRoomNames().filter((n) => n.length >= 2).forEach((n) => { remark = remark.split(n).join(' ') })
       remark = remark.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+      remark = remark.replace(/^[\s是的，,、]+/, '') // 去掉句首悬空的「是/的」虚词
     }
     return { amount: amountFen, type, pay_date: payDate, stage_ids: stageIds, remark, original: text.trim() }
   },
