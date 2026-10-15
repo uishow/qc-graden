@@ -4,6 +4,7 @@ const { yuan2fen, fen2yuan, today } = require('../../utils/format')
 const { BELONG_WHOLEHOUSE } = require('../../utils/wholehouse')
 const att = require('../../utils/attachment')
 const write = require('../../utils/write')
+const { joinNames, normalizeIds } = require('../../utils/arrayId')
 
 // B 防重模型：花费类目不再含「材料」，材料支出统一在「材料清单」登记、自动计入预算，
 // 结构上杜绝与材料清单重复。可手填类目为 人工 / 设计 / 其他 / 订金·定金。
@@ -33,9 +34,12 @@ Page({
     typeNames: TYPES.map((t) => TYPE_NAMES[t]),
     belongIndex: 0,
     belongNames: BELONG_NAMES,
-    stageIndex: 0,
-    stageNames: ['不关联（通用）'],
-    stageIds: [''],
+    // 阶段：多选版——stageIdsSelected 是选中的阶段 id；空数组 = 通用（不关联）
+    stages: [],
+    stageIdsSelected: [],
+    stageChecked: [],
+    stageText: '',
+    showStagePicker: false,
     payDate: today(),
     remark: '',
     attachments: [], // [{fileID, name, kind:'image'|'file'}] 附件凭证
@@ -58,14 +62,15 @@ Page({
       }
       const d = data && data[0]
       if (d) {
-        const stageIndex = this.data.stageIds.indexOf(d.stage_id || '')
+        const initStageIds = normalizeIds(d.stage_ids, d.stage_id)
         this.setData({
           id: d.id,
           baseVersion: d.version,
           amount: fen2yuan(d.amount, false),
           typeIndex: Math.max(0, TYPES.indexOf(d.type)),
           belongIndex: d.belong === BELONG_WHOLEHOUSE ? 1 : 0,
-          stageIndex: stageIndex >= 0 ? stageIndex : 0,
+          stageIdsSelected: initStageIds,
+          stageText: joinNames(initStageIds, this.data.stages),
           payDate: d.pay_date,
           remark: d.remark || '',
           attachments: att.normalizeList(d.attachments),
@@ -90,17 +95,46 @@ Page({
     })
   },
 
-  // 加载本项目阶段，供「所属阶段」可选关联（轻量关联：不强制）
+  // 加载本项目阶段，供「所属阶段」多选关联（轻量关联：不强制）
   async loadStages() {
     const pid = store.getCurrentProjectId()
     const { data } = await cloud.database
       .from('stages').select('id,name').eq('project_id', pid).order('sort_order')
     const rows = data || []
-    this.setData({
-      stageNames: ['不关联（通用）'].concat(rows.map((s) => s.name)),
-      stageIds: [''].concat(rows.map((s) => s.id)),
-    })
+    this.setData({ stages: rows })
   },
+
+  // —— 阶段多选弹窗（复用 diay/edit 同款 .mask/.sheet + .multi-row 模式）——
+  openStagePicker() {
+    this.setBarHidden(true)
+    const checked = (this.data.stages || []).map((s) => this.data.stageIdsSelected.indexOf(s.id) !== -1)
+    this.setData({ showStagePicker: true, stageChecked: checked })
+  },
+  toggleStage(e) {
+    const i = Number(e.currentTarget.dataset.index)
+    const arr = (this.data.stageChecked || []).slice()
+    arr[i] = !arr[i]
+    this.setData({ stageChecked: arr })
+  },
+  cancelStagePicker() {
+    this.setBarHidden(false)
+    this.setData({ showStagePicker: false })
+  },
+  confirmStagePicker() {
+    const ids = []
+    ;(this.data.stageChecked || []).forEach((on, i) => { if (on && this.data.stages[i]) ids.push(this.data.stages[i].id) })
+    this.setData({
+      stageIdsSelected: ids,
+      stageText: joinNames(ids, this.data.stages),
+      showStagePicker: false,
+    })
+    this.setBarHidden(false)
+  },
+  setBarHidden(hidden) {
+    const bar = this.getTabBar && this.getTabBar()
+    if (bar) bar.setData({ hidden: !!hidden })
+  },
+  noop() {},
 
   onInput(e) {
     this.setData({ [e.currentTarget.dataset.field]: e.detail.value })
@@ -110,9 +144,6 @@ Page({
   },
   onBelongChange(e) {
     this.setData({ belongIndex: Number(e.detail.value) })
-  },
-  onStageChange(e) {
-    this.setData({ stageIndex: Number(e.detail.value) })
   },
   onDateChange(e) {
     this.setData({ payDate: e.detail.value })
@@ -164,7 +195,7 @@ Page({
   },
 
   async onSave() {
-    const { id, baseVersion, amount, typeIndex, belongIndex, stageIndex, payDate, remark } = this.data
+    const { id, baseVersion, amount, typeIndex, belongIndex, stageIdsSelected, payDate, remark } = this.data
     const fen = yuan2fen(amount)
     if (fen <= 0) {
       wx.showToast({ title: '请填写金额', icon: 'none' })
@@ -191,7 +222,9 @@ Page({
         type: TYPES[typeIndex],
         amount: fen,
         belong: belongIndex === 1 ? BELONG_WHOLEHOUSE : '',
-        stage_id: this.data.stageIds[stageIndex] || '',
+        // 多选：新字段 stage_ids 数组 + 旧 stage_id 取首项，向后兼容读取端汇总
+        stage_ids: stageIdsSelected,
+        stage_id: stageIdsSelected[0] || '',
         pay_date: payDate,
         remark: remark.trim(),
         attachments: this.data.attachments,

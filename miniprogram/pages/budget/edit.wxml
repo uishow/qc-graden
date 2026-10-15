@@ -13,10 +13,11 @@
     <view class="input">{{belongNames[belongIndex]}}</view>
   </picker>
 
-  <view class="field-label">所属阶段（可选）</view>
-  <picker range="{{stageNames}}" value="{{stageIndex}}" bindchange="onStageChange">
-    <view class="input">{{stageNames[stageIndex]}}</view>
-  </picker>
+  <view class="field-label">所属阶段（可多选）</view>
+  <view class="input picker" bindtap="openStagePicker">
+    <block wx:if="{{stageIdsSelected.length === 0}}"><text class="picker-empty">选择阶段（可多选，不选归入通用）</text></block>
+    <block wx:else><text class="picker-text" style="color:var(--c-primary)">{{stageIdsSelected.length}} 个阶段 · {{stageText}}</text></block>
+  </view>
 
   <view class="field-label">支付日期</view>
   <picker mode="date" value="{{payDate}}" bindchange="onDateChange">
@@ -48,4 +49,33 @@
   </view>
 
   <view class="btn-primary" style="margin-top:32rpx" bindtap="onSave">{{saving ? '保存中…' : '保存'}}</view>
+
+  <!-- 阶段多选弹窗：嵌入 page-root 内部，避免顶级兄弟节点 fixed 在部分机型失效 -->
+  <view wx:if="{{showStagePicker}}" class="mask" bindtap="cancelStagePicker">
+    <view class="sheet" catchtap="noop">
+      <view class="between sheet-head">
+        <view style="font-weight:600;font-size:32rpx">选择所属阶段（可多选）</view>
+        <view class="muted" bindtap="cancelStagePicker">✕</view>
+      </view>
+      <view class="sheet-body">
+        <view wx:if="{{stages.length === 0}}" class="empty">暂无可选阶段</view>
+        <view
+          wx:for="{{stages}}"
+          wx:key="id"
+          class="multi-row {{index === stages.length - 1 ? 'multi-row-last' : ''}} {{stageChecked[index] ? 'multi-row-checked' : ''}}"
+          bindtap="toggleStage"
+          data-index="{{index}}"
+        >
+          <view class="multi-name">{{item.name}}</view>
+          <view class="multi-check"></view>
+        </view>
+      </view>
+      <view class="sheet-foot">
+        <view class="row" style="gap:16rpx">
+          <view class="btn-outline flex1" bindtap="cancelStagePicker">取消</view>
+          <view class="btn-primary flex1" bindtap="confirmStagePicker">确定</view>
+        </view>
+      </view>
+    </view>
+  </view>
 </view>

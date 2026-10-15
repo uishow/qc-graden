@@ -175,10 +175,10 @@
   width: 100%;
   background: var(--c-bg);
   border-radius: 28rpx 28rpx 0 0;
-  padding: 40rpx 32rpx;
-  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  padding: 32rpx 32rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
-  max-height: 86vh;
+  max-height: 70vh;
   /* 弹性纵向布局：head/foot 吸住不缩，body 在剩余空间内滚动 */
   display: flex;
   flex-direction: column;
@@ -200,6 +200,56 @@
   margin-top: 16rpx;
   border-top: 1rpx solid var(--c-card-border);
 }
+/* 多选下拉面板里的单条候选行（左侧 checkbox 圆圈 + 选中行加底色） */
+.multi-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 26rpx 12rpx;
+  border-bottom: 1rpx solid var(--c-card-border);
+  transition: background-color .15s ease;
+}
+.multi-row-last { border-bottom: none; }
+.multi-row-checked { background: var(--c-secondary-bg); }
+.multi-name {
+  font-size: 30rpx;
+  color: var(--c-text);
+  flex: 1;
+  min-width: 0;
+}
+.multi-check {
+  width: 36rpx;
+  height: 36rpx;
+  border: 2rpx solid var(--c-card-border);
+  border-radius: 50%;
+  background: var(--c-bg);
+  flex-shrink: 0;
+  /* 默认无内容；选中态由 .multi-row-checked 注入 ✓ 字符（用 data-content 避免多 text-node 麻烦） */
+  position: relative;
+}
+.multi-row-checked .multi-check {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+}
+.multi-row-checked .multi-check::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* 多选弹窗输入触发器（让输入框「可点选」的视觉） */
+.picker { display: block; min-height: 88rpx; line-height: 48rpx; }
+.picker .picker-empty { color: var(--c-text-2); }
+.picker-text { line-height: 1.5; }
+.picker-tag { line-height: 1.5; }
+
 /* 邀请码 6 格输入：透明 input 覆盖在格子上负责聚焦/收键盘，
    格子里显示的数字由 data 驱动渲染——彻底规避部分机型 number/digit 键盘「敲了不回显」的 bug */
 .code-wrap { position: relative; width: 100%; }

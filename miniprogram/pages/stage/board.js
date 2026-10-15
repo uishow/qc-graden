@@ -58,8 +58,8 @@ Page({
     if (!projectId) return
     const [{ data: stageRows }, { data: expenses }, { data: materials }] = await Promise.all([
       cloud.database.from('stages').select('*').eq('project_id', projectId).order('sort_order'),
-      cloud.database.from('expenses').select('id,amount,stage_id,type').eq('project_id', projectId).neq('deleted', true),
-      cloud.database.from('materials').select('id,total_price,stage_id').eq('project_id', projectId),
+      cloud.database.from('expenses').select('id,amount,stage_id,stage_ids,type').eq('project_id', projectId).neq('deleted', true),
+      cloud.database.from('materials').select('id,total_price,stage_id,stage_ids').eq('project_id', projectId),
     ])
 
     const wholehouseOnly = this.scope === 'wholehouse'
@@ -72,15 +72,22 @@ Page({
       stages = stages.filter((s) => s.key === 'customhome' || (s.name || '').indexOf('全屋定制') !== -1)
     }
 
-    // 每个阶段卡挂该阶段的花费/材料小计（轻量关联：只认带 stage_id 的）
+    // 每个阶段卡挂该阶段的花费/材料小计（轻量关联：只认带 stage 标记的；多选 tagsOf 兼容 _ids+_id）
     const expByStage = {}
     const matByStage = {}
+    const { tagsOf } = require('../../utils/arrayId')
     ;(expenses || []).forEach((e) => {
       // B 防重模型：材料类花费不手填，已由材料清单汇总，按阶段聚合时排除（仅防历史脏数据）
-      if (e.stage_id && e.type !== 'material') expByStage[e.stage_id] = (expByStage[e.stage_id] || 0) + Number(e.amount || 0)
+      const tags = tagsOf(e)
+      if (!tags.length || e.type === 'material') return
+      const amt = Number(e.amount || 0)
+      tags.forEach((tid) => { expByStage[tid] = (expByStage[tid] || 0) + amt })
     })
     ;(materials || []).forEach((m) => {
-      if (m.stage_id) matByStage[m.stage_id] = (matByStage[m.stage_id] || 0) + Number(m.total_price || 0)
+      const tags = tagsOf(m)
+      if (!tags.length) return
+      const price = Number(m.total_price || 0)
+      tags.forEach((tid) => { matByStage[tid] = (matByStage[tid] || 0) + price })
     })
     stages = stages.map((s) => {
       const exp = expByStage[s.id] || 0

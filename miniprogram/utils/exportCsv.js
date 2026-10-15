@@ -10,6 +10,7 @@
 
 const { today, shortDate } = require('./format')
 const { BELONG_WHOLEHOUSE } = require('./wholehouse')
+const { tagsOf } = require('./arrayId')
 
 const EXPENSE_TYPE_NAMES = { material: '材料', labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }
 const MAT_STATUS_NAME = { to_buy: '待购买', bought: '已购买', on_site: '已进场' }
@@ -26,6 +27,15 @@ const SCOPE_EMPTY = {
   expenses: '本项目还没有花费记录',
   materials: '本项目还没有材料',
   wholehouse: '还没有归入全屋定制的材料/花费',
+}
+
+// CSV 阶段字段格式：多选时用「主名 · 副名」拼接；空则显示「通用」。
+// id→name 查不到则回退到 id 本身，避免丢数据。
+function fmtStageMulti(tags, stageMap) {
+  if (!tags || !tags.length) return '通用'
+  const names = tags.map((id) => stageMap[id] || id)
+  if (names.length === 1) return names[0]
+  return names.join('·')
 }
 
 function csvCell(v) {
@@ -167,7 +177,8 @@ async function runExport(cloud, projectId, scope) {
           planned: '',
           deviation: '',
           belong: e.belong === BELONG_WHOLEHOUSE ? '全屋定制' : '',
-          stage: e.stage_id ? (stageMap[e.stage_id] || '通用') : '通用',
+          // 多选阶段：用「主名 · 副名 · 副名」形式，取首项作主名，空则显示「通用」
+          stage: fmtStageMulti(tagsOf(e), stageMap),
           date: e.pay_date || '',
           spec: '',
         })
@@ -190,7 +201,7 @@ async function runExport(cloud, projectId, scope) {
           planned: planPrice,
           deviation: dev,
           belong: m.belong === BELONG_WHOLEHOUSE ? '全屋定制' : '',
-          stage: m.stage_id ? (stageMap[m.stage_id] || '通用') : '通用',
+          stage: fmtStageMulti(tagsOf(m), stageMap),
           date: shortDate(m.created_at),
           spec,
         })

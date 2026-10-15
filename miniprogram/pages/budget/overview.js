@@ -245,18 +245,29 @@ Page({
       mat.filter((m) => m.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike((m.name || '') + ' ' + (m.remark || ''))).length +
       list.filter((e) => e.belong !== BELONG_WHOLEHOUSE && isWholeHouseLike(e.remark || '')).length
 
-    // 费用总览·按阶段维度（轻量关联：只认带 stage_id 的；未带归入「通用」；花费排除历史材料类；
-    // 材料只计已购部分，与已花费口径一致）
+    // 费用总览·按阶段维度（轻量关联：只认带 stage 标记的；多选 tagsOf 兼容 _ids+_id；未带归入「通用」；
+    // 花费排除历史材料类；材料只计已购部分，与已花费口径一致）
+    const { tagsOf } = require('../../utils/arrayId')
     const expByStage = {}
     const matByStage = {}
-    list.forEach((e) => { if (e.stage_id && e.type !== 'material') expByStage[e.stage_id] = (expByStage[e.stage_id] || 0) + Number(e.amount || 0) })
-    purchasedMat.forEach((m) => { if (m.stage_id) matByStage[m.stage_id] = (matByStage[m.stage_id] || 0) + Number(m.total_price || 0) })
+    list.forEach((e) => {
+      const tags = tagsOf(e)
+      if (!tags.length || e.type === 'material') return
+      const amt = Number(e.amount || 0)
+      tags.forEach((tid) => { expByStage[tid] = (expByStage[tid] || 0) + amt })
+    })
+    purchasedMat.forEach((m) => {
+      const tags = tagsOf(m)
+      if (!tags.length) return
+      const price = Number(m.total_price || 0)
+      tags.forEach((tid) => { matByStage[tid] = (matByStage[tid] || 0) + price })
+    })
     const stageRollups = (stages || [])
       .map((s) => ({ id: s.id, name: s.name, exp: expByStage[s.id] || 0, mat: matByStage[s.id] || 0 }))
       .filter((r) => r.exp > 0 || r.mat > 0)
       .map((r) => ({ name: r.name, expText: fen2yuan(r.exp), matText: fen2yuan(r.mat), total: r.exp + r.mat }))
-    const untaggedExp = list.reduce((s, e) => s + (e.stage_id ? 0 : Number(e.amount || 0)), 0)
-    const untaggedMat = mat.reduce((s, m) => s + (m.stage_id ? 0 : Number(m.total_price || 0)), 0)
+    const untaggedExp = list.reduce((s, e) => s + (tagsOf(e).length ? 0 : Number(e.amount || 0)), 0)
+    const untaggedMat = mat.reduce((s, m) => s + (tagsOf(m).length ? 0 : Number(m.total_price || 0)), 0)
     if (untaggedExp > 0 || untaggedMat > 0) {
       stageRollups.push({ name: '通用（未归类）', expText: fen2yuan(untaggedExp), matText: fen2yuan(untaggedMat), total: untaggedExp + untaggedMat })
     }

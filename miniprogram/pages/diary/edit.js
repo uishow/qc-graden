@@ -2,6 +2,7 @@ const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
 const { today } = require('../../utils/format')
 const write = require('../../utils/write')
+const { joinNames, normalizeIds } = require('../../utils/arrayId')
 
 // 订阅消息模板：家人新日记提醒（后台公共模板，字段 thing1作者/thing2内容/time3时间/thing5备注）
 const SUBSCRIBE_TMPL_ID = 'd7KlYUn-ZiAtiSr3kuRkiD2qYbYygi0T_6kLxYTMMTk'
@@ -15,9 +16,16 @@ Page({
     content: '',
     diaryDate: today(),
     rooms: [],
-    roomIndex: -1,
     stages: [],
-    stageIndex: -1,
+    // 多选 state：roomIds/stageIdsSelected 是「已确认」选中 id 数组；*Checked 是弹窗里每项临时勾选状态
+    roomIds: [], // string[] 选中房间 id
+    stageIdsSelected: [], // string[] 选中阶段 id
+    roomChecked: [], // boolean[] 弹窗中房间勾选状态
+    stageChecked: [], // boolean[] 弹窗中阶段勾选状态
+    roomText: '', // 触发器上展示文本（4 房间/主卧、次卧等）
+    stageText: '',
+    showRoomPicker: false,
+    showStagePicker: false,
     localImages: [],
     saving: false,
   },
@@ -34,21 +42,30 @@ Page({
       cloud.database.from('rooms').select('id,name').eq('project_id', projectId).order('sort_order'),
       cloud.database.from('stages').select('id,name').eq('project_id', projectId).order('sort_order'),
     ])
-    this.setData({ rooms: rooms || [], stages: stages || [] })
+    const roomsArr = rooms || []
+    const stagesArr = stages || []
+    // 兼容旧数据：取多选数组，没有则从单字段构造
+    this._roomsArr = roomsArr
+    this._stagesArr = stagesArr
+    this.setData({ rooms: roomsArr, stages: stagesArr })
 
     if (options.id) {
       const { data } = await cloud.database
         .from('diaries').select('*').eq('id', options.id).limit(1)
       const d = data && data[0]
       if (d) {
+        const initRoomIds = normalizeIds(d.room_ids, d.room_id)
+        const initStageIds = normalizeIds(d.stage_ids, d.stage_id)
         this.setData({
           id: d.id,
           baseVersion: d.version,
           title: d.title,
           content: d.content || '',
           diaryDate: d.diary_date,
-          roomIndex: (this.data.rooms || []).findIndex((r) => r.id === d.room_id),
-          stageIndex: (this.data.stages || []).findIndex((s) => s.id === d.stage_id),
+          roomIds: initRoomIds,
+          stageIdsSelected: initStageIds,
+          roomText: joinNames(initRoomIds, this.data.rooms),
+          stageText: joinNames(initStageIds, this.data.stages),
         })
       }
     } else {
@@ -69,11 +86,66 @@ Page({
   onDateChange(e) {
     this.setData({ diaryDate: e.detail.value })
   },
-  onRoomChange(e) {
-    this.setData({ roomIndex: Number(e.detail.value) })
+
+  // —— 房间多选弹窗 ——
+  openRoomPicker() {
+    this.setBarHidden(true)
+    const checked = (this.data.rooms || []).map((r) => this.data.roomIds.indexOf(r.id) !== -1)
+    this.setData({ showRoomPicker: true, roomChecked: checked })
   },
-  onStageChange(e) {
-    this.setData({ stageIndex: Number(e.detail.value) })
+  toggleRoom(e) {
+    const i = Number(e.currentTarget.dataset.index)
+    const arr = (this.data.roomChecked || []).slice()
+    arr[i] = !arr[i]
+    this.setData({ roomChecked: arr })
+  },
+  cancelRoomPicker() {
+    this.setBarHidden(false)
+    this.setData({ showRoomPicker: false })
+  },
+  confirmRoomPicker() {
+    const ids = []
+    ;(this.data.roomChecked || []).forEach((on, i) => { if (on && this.data.rooms[i]) ids.push(this.data.rooms[i].id) })
+    this.setData({
+      roomIds: ids,
+      roomText: joinNames(ids, this.data.rooms),
+      showRoomPicker: false,
+    })
+    this.setBarHidden(false)
+  },
+
+  // —— 阶段多选弹窗 ——
+  openStagePicker() {
+    this.setBarHidden(true)
+    const checked = (this.data.stages || []).map((s) => this.data.stageIdsSelected.indexOf(s.id) !== -1)
+    this.setData({ showStagePicker: true, stageChecked: checked })
+  },
+  toggleStage(e) {
+    const i = Number(e.currentTarget.dataset.index)
+    const arr = (this.data.stageChecked || []).slice()
+    arr[i] = !arr[i]
+    this.setData({ stageChecked: arr })
+  },
+  cancelStagePicker() {
+    this.setBarHidden(false)
+    this.setData({ showStagePicker: false })
+  },
+  confirmStagePicker() {
+    const ids = []
+    ;(this.data.stageChecked || []).forEach((on, i) => { if (on && this.data.stages[i]) ids.push(this.data.stages[i].id) })
+    this.setData({
+      stageIdsSelected: ids,
+      stageText: joinNames(ids, this.data.stages),
+      showStagePicker: false,
+    })
+    this.setBarHidden(false)
+  },
+
+  noop() {},
+  // 弹窗打开期间隐藏自定义 tabBar：其框架包装层层级高于页面 fixed 弹窗，会盖住底部按钮
+  setBarHidden(hidden) {
+    const bar = this.getTabBar && this.getTabBar()
+    if (bar) bar.setData({ hidden: !!hidden })
   },
 
   chooseImages() {
@@ -110,7 +182,7 @@ Page({
   },
 
   async onSave() {
-    const { id, baseVersion, title, content, diaryDate, rooms, roomIndex, stages, stageIndex } = this.data
+    const { id, baseVersion, title, content, diaryDate, roomIds, stageIdsSelected } = this.data
     if (!title.trim()) {
       wx.showToast({ title: '请填写标题', icon: 'none' })
       return
@@ -132,8 +204,11 @@ Page({
         title: title.trim(),
         content,
         diary_date: diaryDate,
-        room_id: roomIndex >= 0 ? rooms[roomIndex].id : null,
-        stage_id: stageIndex >= 0 ? stages[stageIndex].id : null,
+        // 新字段（多选）+ 旧单值字段（主值，取首项；老读取端/汇总处仍能用）
+        room_ids: roomIds,
+        stage_ids: stageIdsSelected,
+        room_id: roomIds[0] || '',
+        stage_id: stageIdsSelected[0] || '',
         image_paths: imagePaths,
         last_editor_id: uid,
         created_at: now,

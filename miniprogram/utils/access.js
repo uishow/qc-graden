@@ -43,4 +43,15 @@ function isManager(role) {
   return role === 'owner' || role === 'family'
 }
 
-module.exports = { myMembers, myProjectIds, myRole, roleLabel, isManager }
+// 当前账号是否为本项目 active 成员：异步从 cloud.auth 拿 session，调 myMembers 过滤
+async function checkMember(projectId) {
+  if (!projectId) return false
+  try {
+    const r = await cloud.auth.getSession()
+    const openid = r && r.user && r.user.id
+    const role = await myRole(openid, projectId)
+    return !!role
+  } catch (e) { return false }
+}
+
+module.exports = { myMembers, myProjectIds, myRole, roleLabel, isManager, checkMember }

@@ -4,6 +4,7 @@ const { yuan2fen, fen2yuan } = require('../../utils/format')
 const { BELONG_WHOLEHOUSE, WHOLEHOUSE_SUBS } = require('../../utils/wholehouse')
 const att = require('../../utils/attachment')
 const write = require('../../utils/write')
+const { joinNames, normalizeIds } = require('../../utils/arrayId')
 
 const CATEGORIES = ['主材', '辅材', '家具', '家电', '软装']
 const STATUS = ['to_buy', 'bought', 'on_site']
@@ -30,9 +31,12 @@ Page({
     belongNames: BELONG_NAMES,
     subIndex: 0,
     subNames: SUB_NAMES,
-    stageIndex: 0,
-    stageNames: ['不关联（通用）'],
-    stageIds: [''],
+    // 阶段：多选版——stageIdsSelected 是选中的阶段 id；空数组 = 通用（不关联）
+    stages: [],
+    stageIdsSelected: [],
+    stageChecked: [],
+    stageText: '',
+    showStagePicker: false,
     remark: '',
     attachments: [], // [{fileID, name, kind:'image'|'file'}] 附件凭证（报价单/效果图等）
     revisions: [], // 修改历史（revisions，只读展示）
@@ -53,7 +57,7 @@ Page({
       this._origStatus = d ? d.status : null
       this._origTotalPrice = d != null ? d.total_price : null
       if (d) {
-        const stageIndex = this.data.stageIds.indexOf(d.stage_id || '')
+        const initStageIds = normalizeIds(d.stage_ids, d.stage_id)
         this.setData({
           id: d.id,
           baseVersion: d.version,
@@ -67,7 +71,8 @@ Page({
           statusIndex: Math.max(0, STATUS.indexOf(d.status)),
           belongIndex: d.belong === BELONG_WHOLEHOUSE ? 1 : 0,
           subIndex: Math.max(0, SUB_NAMES.indexOf(d.sub || '未分类')),
-          stageIndex: stageIndex >= 0 ? stageIndex : 0,
+          stageIdsSelected: initStageIds,
+          stageText: joinNames(initStageIds, this.data.stages),
           remark: d.remark || '',
           attachments: att.normalizeList(d.attachments),
         })
@@ -91,17 +96,46 @@ Page({
     })
   },
 
-  // 加载本项目阶段，供「所属阶段」可选关联（轻量关联：不强制）
+  // 加载本项目阶段，供「所属阶段」多选关联（轻量关联：不强制）
   async loadStages() {
     const pid = store.getCurrentProjectId()
     const { data } = await cloud.database
       .from('stages').select('id,name').eq('project_id', pid).order('sort_order')
     const rows = data || []
-    this.setData({
-      stageNames: ['不关联（通用）'].concat(rows.map((s) => s.name)),
-      stageIds: [''].concat(rows.map((s) => s.id)),
-    })
+    this.setData({ stages: rows })
   },
+
+  // —— 阶段多选弹窗（与 budget/edit 完全同款）——
+  openStagePicker() {
+    this.setBarHidden(true)
+    const checked = (this.data.stages || []).map((s) => this.data.stageIdsSelected.indexOf(s.id) !== -1)
+    this.setData({ showStagePicker: true, stageChecked: checked })
+  },
+  toggleStage(e) {
+    const i = Number(e.currentTarget.dataset.index)
+    const arr = (this.data.stageChecked || []).slice()
+    arr[i] = !arr[i]
+    this.setData({ stageChecked: arr })
+  },
+  cancelStagePicker() {
+    this.setBarHidden(false)
+    this.setData({ showStagePicker: false })
+  },
+  confirmStagePicker() {
+    const ids = []
+    ;(this.data.stageChecked || []).forEach((on, i) => { if (on && this.data.stages[i]) ids.push(this.data.stages[i].id) })
+    this.setData({
+      stageIdsSelected: ids,
+      stageText: joinNames(ids, this.data.stages),
+      showStagePicker: false,
+    })
+    this.setBarHidden(false)
+  },
+  setBarHidden(hidden) {
+    const bar = this.getTabBar && this.getTabBar()
+    if (bar) bar.setData({ hidden: !!hidden })
+  },
+  noop() {},
 
   onInput(e) {
     this.setData({ [e.currentTarget.dataset.field]: e.detail.value })
@@ -119,9 +153,6 @@ Page({
   },
   onSubChange(e) {
     this.setData({ subIndex: Number(e.detail.value) })
-  },
-  onStageChange(e) {
-    this.setData({ stageIndex: Number(e.detail.value) })
   },
 
   // —— 附件凭证：图片（拍照/相册）+ 微信聊天文件，传云存储，随保存写入 attachments ——
@@ -180,7 +211,8 @@ Page({
         status: STATUS[d.statusIndex],
         belong: d.belongIndex === 1 ? BELONG_WHOLEHOUSE : '',
         sub: d.belongIndex === 1 && d.subIndex > 0 ? SUB_NAMES[d.subIndex] : '',
-        stage_id: d.stageIds[d.stageIndex] || '',
+        stage_id: d.stageIdsSelected[0] || '',
+        stage_ids: d.stageIdsSelected,
         remark: d.remark.trim(),
         attachments: d.attachments,
         updated_at: new Date().toISOString(),

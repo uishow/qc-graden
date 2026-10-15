@@ -86,7 +86,7 @@ Page({
       }
       const { data, error } = await cloud.database
         .from('diaries')
-        .select('id,title,content,diary_date,image_paths,room_id,stage_id')
+        .select('id,title,content,diary_date,image_paths,room_id,room_ids,stage_id,stage_ids')
         .eq('project_id', projectId)
         .neq('deleted', true)
         .order('diary_date', { ascending: false })
