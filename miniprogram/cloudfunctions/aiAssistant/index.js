@@ -225,13 +225,60 @@ async function callLLM(context, question) {
   return txt ? String(txt).trim() : null
 }
 
+// 提取结果校验/修复层：LLM 返回 JSON 后，统一规整成写库就绪结构。
+// 缺关键字段 / 字段非法 → 返回 null（让客户端判定为解析失败、走提示或重试）。
+function repairExtract(coll, data) {
+  if (!data || typeof data !== 'object') return null
+  if (coll === 'material') {
+    const name = String(data.name || '').trim()
+    if (!name) return null // 材料名是必填
+    const qty = Number(data.quantity || 0)
+    return {
+      name,
+      brand: String(data.brand || '').trim(),
+      quantity: qty > 0 ? qty : 1,
+      unit: String(data.unit || '个').trim() || '个',
+      unit_price_yuan: Math.max(0, Number(data.unit_price_yuan || 0) || 0),
+      note: String(data.note || '').trim(),
+    }
+  }
+  if (coll === 'expense') {
+    const amount = Number(data.amount_yuan || 0)
+    if (!(amount > 0)) return null // 金额必填且 > 0
+    const valid = ['labor', 'design', 'deposit', 'other', 'material']
+    let type = String(data.type || 'other').toLowerCase()
+    if (valid.indexOf(type) === -1) type = 'other'
+    const payDate = /^\d{4}-\d{1,2}-\d{1,2}$/.test(String(data.pay_date || '')) ? String(data.pay_date) : ''
+    return {
+      amount_yuan: amount,
+      type,
+      pay_date: payDate, // 空 → 客户端补今天
+      stage_names: Array.isArray(data.stage_names) ? data.stage_names.map(String).filter(Boolean) : [],
+      remark: String(data.remark || '').trim(),
+    }
+  }
+  if (coll === 'diary') {
+    const content = String(data.content || '').trim()
+    const titleRaw = String(data.title || '').trim()
+    const title = (titleRaw || content.slice(0, 20) || '日记').slice(0, 20)
+    return {
+      title,
+      content,
+      diary_date: /^\d{4}-\d{1,2}-\d{1,2}$/.test(String(data.diary_date || '')) ? String(data.diary_date) : '',
+      room_names: Array.isArray(data.room_names) ? data.room_names.map(String).filter(Boolean) : [],
+      stage_names: Array.isArray(data.stage_names) ? data.stage_names.map(String).filter(Boolean) : [],
+    }
+  }
+  return null
+}
+
 // —— 录入兜底提取：自由文本 → 结构化 JSON（启发式解析失败时客户端调用）——
 // 客户端传：{ mode:'extract', collection:'material'|'expense'|'diary', text, rooms:[name...], stages:[name...] }
 // 返回：{ ok:true, data:{...} } 或 { ok:false, reason:'not_configured'|'unknown_collection'|'call_failed'|'empty_reply'|'parse_error', error? }
 const EXTRACT_SCHEMA = {
   material: {
-    desc: 'name(字符串,材料名), quantity(数字,数量), unit(字符串,单位如 张/个/桶/平方), unit_price_yuan(数字,单价元,无法推断填0), note(字符串,备注/要求可空)',
-    example: '{"name":"欧派木门","quantity":3,"unit":"张","unit_price_yuan":300,"note":"本周日上门安装"}',
+    desc: 'name(字符串,材料名), brand(字符串,品牌名,可空), quantity(数字,数量), unit(字符串,单位如 张/个/桶/平方), unit_price_yuan(数字,单价元,无法推断填0), note(字符串,备注/要求可空)',
+    example: '{"name":"木门","brand":"欧派","quantity":3,"unit":"张","unit_price_yuan":300,"note":"本周日上门安装"}',
   },
   expense: {
     desc: 'amount_yuan(数字,金额元), type(枚举: labor人工/design设计/deposit订金定金/other其他), pay_date(YYYY-MM-DD,无法确定用今天), stage_names(字符串数组,从给定阶段名里挑,可空), remark(字符串,可空)',
@@ -301,7 +348,9 @@ async function extractStructured(event) {
   const s = raw.indexOf('{'); const e = raw.lastIndexOf('}')
   if (s !== -1 && e !== -1 && e > s) raw = raw.slice(s, e + 1)
   try {
-    const data = JSON.parse(raw)
+    const data0 = JSON.parse(raw)
+    const data = repairExtract(coll, data0)
+    if (!data) return { ok: false, reason: 'parse_error', error: '字段缺失或非法' }
     return { ok: true, data }
   } catch (err) {
     return { ok: false, reason: 'parse_error', error: String(raw).slice(0, 200) }
