@@ -61,7 +61,23 @@ exports.main = async (event) => {
     return { ok: true, isManager: mgr, scope, list: [] }
   }
 
-  // 投影成前端更易用的字段（含 openid 长度简写：普通用户只看自己，all 时显示「OpenID 后 4 位」做简单区分）
+  // ★ 批量查 profiles 拿昵称（all 视图要展示「是谁提交的」，openid 尾 4 位不直观）
+  //   profiles 安全规则为服务端独占（read=false），这里用云函数管理员上下文读
+  let nickMap = {}
+  try {
+    const openids = Array.from(new Set(rows.map((r) => r.openid).filter(Boolean)))
+    if (openids.length) {
+      // .in 是 db.command 的方法，老 SDK 写法；用 db.command.in 更稳
+      const _ = cloud.database().command // 提前拿一份
+      const pr = await cloud.database().collection('profiles')
+        .where({ owner_id: _.in(openids) })
+        .limit(200)
+        .get()
+      ;(pr.data || []).forEach((p) => { if (p.owner_id) nickMap[p.owner_id] = String(p.nick_name || '').trim() })
+    }
+  } catch (e) { /* profiles 集合无数据/无读权限时忽略，回落 openid 尾 4 位 */ }
+
+  // 投影成前端更易用的字段（含 openid 长度简写：普通用户只看自己，all 时显示「昵称」做简单区分）
   const list = rows.map((r) => ({
     id: r._id || r.id,
     openid: r.openid || '',
@@ -74,7 +90,8 @@ exports.main = async (event) => {
     comment: short(r.comment, 200),
     app_version: r.app_version || '',
     system: r.system || '',
-    // 隐藏手机端 openid 全串：仅显示尾 4 位，避免泄漏
+    nickName: nickMap[r.openid] || '', // 优先用昵称（all 视图展示用）
+    // 兜底：没昵称时显示 openid 尾 4 位
     openidTail: r.openid ? String(r.openid).slice(-4) : '????',
   }))
 

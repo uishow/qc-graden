@@ -157,28 +157,31 @@
             <view class="muted">{{item.timeText}}</view>
             <view style="display:flex;gap:8rpx;align-items:center">
               <view wx:if="{{item.fromLocal}}" class="tag" style="font-size:20rpx;padding:2rpx 10rpx;background:var(--c-secondary-bg);color:var(--c-text-2)">本地缓存</view>
-              <view wx:if="{{historyScope === 'all'}}" class="muted" style="font-size:22rpx">用户 ···{{item.openidTail}}</view>
+              <view wx:if="{{historyScope === 'all' && (item.nickName || item.openidTail)}}" class="muted" style="font-size:22rpx">
+                <text wx:if="{{item.nickName}}">{{item.nickName}}</text>
+                <text wx:else>用户 ···{{item.openidTail}}</text>
+              </view>
             </view>
           </view>
           <view class="history-row">
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">易用性</text>
               <view class="history-stars">
-                <text wx:for="{{5}}" wx:key="u{{index}}" class="h-star {{item.scores.usability > index ? 'h-star-on' : ''}}">★</text>
+                <text wx:for="{{5}}" wx:key="u{{index}}" class="h-star" style="color:{{item.scores.usability > index ? '#B08A47' : '#8B7B5A'}};opacity:{{item.scores.usability > index ? 1 : 0.35}}">★</text>
               </view>
               <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.usability || 0}}分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">美观性</text>
               <view class="history-stars">
-                <text wx:for="{{5}}" wx:key="a{{index}}" class="h-star {{item.scores.aesthetics > index ? 'h-star-on' : ''}}">★</text>
+                <text wx:for="{{5}}" wx:key="a{{index}}" class="h-star" style="color:{{item.scores.aesthetics > index ? '#B08A47' : '#8B7B5A'}};opacity:{{item.scores.aesthetics > index ? 1 : 0.35}}">★</text>
               </view>
               <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.aesthetics || 0}}分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">功能性</text>
               <view class="history-stars">
-                <text wx:for="{{5}}" wx:key="f{{index}}" class="h-star {{item.scores.functionality > index ? 'h-star-on' : ''}}">★</text>
+                <text wx:for="{{5}}" wx:key="f{{index}}" class="h-star" style="color:{{item.scores.functionality > index ? '#B08A47' : '#8B7B5A'}};opacity:{{item.scores.functionality > index ? 1 : 0.35}}">★</text>
               </view>
               <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.functionality || 0}}分</text>
             </view>
@@ -244,8 +247,10 @@
         <!-- 环境信息 -->
         <view class="detail-section">
           <view class="detail-section-title">环境信息</view>
-          <view wx:if="{{historyScope === 'all' && detailItem.openidTail}}" class="detail-meta-row">
-            <text class="muted">用户</text><text>···{{detailItem.openidTail}}</text>
+          <view wx:if="{{historyScope === 'all' && (detailItem.nickName || detailItem.openidTail)}}" class="detail-meta-row">
+            <text class="muted">用户</text>
+            <text wx:if="{{detailItem.nickName}}">{{detailItem.nickName}}</text>
+            <text wx:else>···{{detailItem.openidTail}}</text>
           </view>
           <view wx:if="{{detailItem.system}}" class="detail-meta-row">
             <text class="muted">系统</text><text>{{detailItem.system}}</text>
