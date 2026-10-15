@@ -95,6 +95,17 @@
       <view class="muted func-cell-chevron">›</view>
     </view>
 
+    <!-- 第 4 行（整行，仅管理员）：AI 管家反馈闭环待办台 -->
+    <view wx:if="{{isAnyManager}}" class="card func-row func-row-full" style="margin-bottom:16rpx" bindtap="goAIFeedback">
+      <view class="func-cell func-cell-pure">
+        <view class="func-cell-main">
+          <view class="func-cell-label">AI 管家反馈</view>
+          <view class="func-cell-sub muted">{{aiPendingCount ? '待处理 ' + aiPendingCount + ' 类' : '看 AI 哪些问题没答好'}}</view>
+        </view>
+      </view>
+      <view class="muted func-cell-chevron">›</view>
+    </view>
+
     <view class="muted" style="margin-top:40rpx;text-align:center">装修日记本 · 设计文档 V1.0</view>
   </block>
 

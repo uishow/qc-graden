@@ -3,6 +3,7 @@ const store = require('../../utils/store')
 const { fen2yuan } = require('../../utils/format')
 const { exportExpensesCsv } = require('../../utils/exportCsv')
 const access = require('../../utils/access')
+const aiFeedback = require('../../utils/aiFeedback')
 
 const app = getApp()
 
@@ -39,6 +40,8 @@ Page({
     aiConfigured: false,
     aiKeyTail: '',
     aiSaving: false,
+    // AI 管家反馈闭环待办数（仅管理员；ai_feedback 经 aiFeedback 云函数读）
+    aiPendingCount: 0,
   },
 
   async onShow() {
@@ -68,6 +71,14 @@ Page({
       this.setData({ myNick: (profRows && profRows[0] && profRows[0].nick_name) || '' })
     } catch (e) { /* 读失败不影响页面，昵称显示为未设置 */ }
     await this.loadProjects(openid)
+    this.loadAIPending()
+  },
+
+  // AI 管家反馈待办角标（失败静默：角标不是核心信息，不能拖慢/卡住「我的」页）
+  async loadAIPending() {
+    if (!this.data.isAnyManager) { this.setData({ aiPendingCount: 0 }); return }
+    const { data } = await aiFeedback.summary()
+    this.setData({ aiPendingCount: (data && data.pendingGroups) || 0 })
   },
 
   onHide() {
@@ -139,6 +150,10 @@ Page({
   // APP 评价与意见：跳转独立页（pages/feedback/edit，三维 5 分评分 + 意见框 + 内嵌我的反馈历史）
   goFeedback() {
     wx.navigateTo({ url: '/pages/feedback/edit' })
+  },
+  // AI 管家反馈闭环待办台（pages/ai/feedback，仅管理员可见入口）
+  goAIFeedback() {
+    wx.navigateTo({ url: '/pages/ai/feedback' })
   },
   setThemeA() { this.switchTheme('theme-a') },
   setThemeB() { this.switchTheme('theme-b') },

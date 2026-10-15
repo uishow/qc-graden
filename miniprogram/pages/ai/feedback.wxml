@@ -1,0 +1,75 @@
+<view class="page-root">
+  <view class="fb-head">
+    <view class="between">
+      <view style="font-weight:600;font-size:32rpx">AI 管家反馈</view>
+      <view class="btn-sm" bindtap="copyPending">📋 复制待办</view>
+    </view>
+    <view class="muted" style="margin-top:8rpx">
+      共 {{total}} 条记录，{{pendingCount}} 类待处理。按「出现次数 × 严重程度」排序，先修最痛的。
+    </view>
+  </view>
+
+  <!-- 状态筛选 -->
+  <view class="fb-filters">
+    <view
+      wx:for="{{filters}}"
+      wx:key="key"
+      class="fb-filter {{filter === item.key ? 'on' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onFilter"
+    >{{item.label}}</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="fb-empty muted">加载中…</view>
+  <view wx:elif="{{groups.length === 0}}" class="fb-empty muted">
+    {{filter === 'pending' ? '🎉 暂无待处理反馈' : '该状态下暂无记录'}}
+  </view>
+
+  <view wx:for="{{groups}}" wx:key="key" class="card fb-card">
+    <view class="between" bindtap="toggleExpand" data-key="{{item.key}}">
+      <view class="fb-title">
+        <text class="fb-signal">{{item.signalText}}</text>
+        <text wx:if="{{item.intent}}" class="fb-intent">{{item.intent}}</text>
+      </view>
+      <view class="fb-count">×{{item.count}}</view>
+    </view>
+    <view class="muted" style="font-size:24rpx;margin-top:6rpx">
+      最近 {{item.timeText}} · 状态：{{item.statusText}}<text wx:if="{{item.note}}"> · {{item.note}}</text>
+    </view>
+
+    <!-- 首条样例（默认展示，足够定位问题） -->
+    <block wx:if="{{item.samples.length}}">
+      <view class="fb-sample">
+        <view class="fb-line"><text class="fb-k">用户说：</text>{{item.samples[0].question || '—'}}</view>
+        <view wx:if="{{item.samples[0].reason}}" class="fb-line"><text class="fb-k">差异字段：</text>{{item.samples[0].reason}}</view>
+        <view wx:if="{{item.samples[0].understood}}" class="fb-line"><text class="fb-k">AI 解析：</text>{{item.samples[0].understood}}</view>
+        <view wx:if="{{item.samples[0].fixed}}" class="fb-line fb-fixed"><text class="fb-k">用户改后：</text>{{item.samples[0].fixed}}</view>
+      </view>
+    </block>
+
+    <!-- 展开：看全部样例（最多 3 条） -->
+    <block wx:if="{{expanded[item.key]}}">
+      <view wx:for="{{item.samples}}" wx:for-item="s" wx:for-index="si" wx:key="si" class="fb-sample">
+        <block wx:if="{{si > 0}}">
+          <view class="fb-line"><text class="fb-k">用户说：</text>{{s.question || '—'}}</view>
+          <view wx:if="{{s.reason}}" class="fb-line"><text class="fb-k">差异字段：</text>{{s.reason}}</view>
+          <view wx:if="{{s.understood}}" class="fb-line"><text class="fb-k">AI 解析：</text>{{s.understood}}</view>
+          <view wx:if="{{s.fixed}}" class="fb-line fb-fixed"><text class="fb-k">用户改后：</text>{{s.fixed}}</view>
+          <view class="muted" style="font-size:22rpx">　{{s.at}}</view>
+        </block>
+      </view>
+      <view class="muted" style="font-size:22rpx" bindtap="toggleExpand" data-key="{{item.key}}">收起 ▴</view>
+    </block>
+    <view wx:else class="muted fb-more" bindtap="toggleExpand" data-key="{{item.key}}">展开全部样例 ▾</view>
+
+    <!-- 状态机 -->
+    <view class="fb-actions">
+      <view wx:if="{{item.status === 'pending'}}" class="fb-btn fb-btn-ok" data-idx="{{index}}" data-status="fixed" bindtap="mark">已修复</view>
+      <view wx:if="{{item.status === 'pending'}}" class="fb-btn" data-idx="{{index}}" data-status="notbug" bindtap="mark">不是问题</view>
+      <view wx:if="{{item.status === 'pending'}}" class="fb-btn" data-idx="{{index}}" data-status="ignored" bindtap="mark">忽略</view>
+      <view wx:if="{{item.status !== 'pending'}}" class="fb-btn" data-idx="{{index}}" data-status="pending" bindtap="mark">恢复待处理</view>
+    </view>
+  </view>
+
+  <view style="height:40rpx"></view>
+</view>
