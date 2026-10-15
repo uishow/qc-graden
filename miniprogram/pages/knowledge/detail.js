@@ -1,5 +1,6 @@
 const { cloud, command } = require('../../utils/cloud')
 const store = require('../../utils/store')
+const { formatLocal } = require('../../utils/time')
 
 Page({
   data: {
@@ -62,7 +63,7 @@ Page({
     const bits = []
     if (article.source_note) bits.push(article.source_note)
     else if (article.source === 'ima') bits.push('ima 共享库')
-    if (article.created_at) bits.push(String(article.created_at).slice(0, 10))
+    if (article.created_at) bits.push(formatLocal(article.created_at, 'date'))
     bits.push('阅读 ' + (article.view_count || 0))
     const metaText = bits.join(' · ')
 
@@ -159,7 +160,7 @@ Page({
       comments: list.map((c) => ({
         ...c,
         author: nameMap[c.owner_id] || '邻居',
-        time: String(c.created_at).slice(0, 10),
+        time: formatLocal(c.created_at, 'date'),
       })),
     })
   },

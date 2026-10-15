@@ -1,6 +1,7 @@
 const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
 const access = require('../../utils/access')
+const { formatLocal } = require('../../utils/time')
 
 const app = getApp()
 
@@ -84,9 +85,10 @@ Page({
         this.setData({ groups: [], empty: true })
         return
       }
+      // select 增加 created_at（之前没查，每条卡片下方显示不出具体时分）
       const { data, error } = await cloud.database
         .from('diaries')
-        .select('id,title,content,diary_date,image_paths,room_id,room_ids,stage_id,stage_ids')
+        .select('id,title,content,diary_date,created_at,image_paths,room_id,room_ids,stage_id,stage_ids')
         .eq('project_id', projectId)
         .neq('deleted', true)
         .order('diary_date', { ascending: false })
@@ -110,6 +112,7 @@ Page({
             ...d,
             summary: (d.content || '').slice(0, 50),
             imageCount: (d.image_paths || []).length,
+            timeText: formatLocal(d.created_at, 'time'), // HH:mm（本地）
           })),
         }))
       this.setData({ groups, empty: groups.length === 0 })
@@ -166,7 +169,7 @@ Page({
         this.setData({
           digestText: d.summary || '',
           digestStats: d.stats || '',
-          digestTime: String(d.created_at || '').slice(5, 16).replace('T', ' '),
+          digestTime: formatLocal(d.created_at, 'short') || '',
           digestAuto: true,
         })
       }

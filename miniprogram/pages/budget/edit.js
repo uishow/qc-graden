@@ -5,6 +5,7 @@ const { BELONG_WHOLEHOUSE } = require('../../utils/wholehouse')
 const att = require('../../utils/attachment')
 const write = require('../../utils/write')
 const { joinNames, normalizeIds } = require('../../utils/arrayId')
+const { formatLocal } = require('../../utils/time')
 
 // B 防重模型：花费类目不再含「材料」，材料支出统一在「材料清单」登记、自动计入预算，
 // 结构上杜绝与材料清单重复。可手填类目为 人工 / 设计 / 其他 / 订金·定金。
@@ -88,7 +89,7 @@ Page({
       .order('created_at', { ascending: false }).limit(20)
     this.setData({
       revisions: (data || []).map((r) => ({
-        timeText: String(r.created_at || '').slice(0, 16).replace('T', ' ') || '—',
+        timeText: formatLocal(r.created_at, 'datetime') || '—',
         actionText: r.action === 'update' ? '修改' : r.action === 'create' ? '创建' : (r.action || '操作'),
         newVersion: r.new_version || '',
       })),

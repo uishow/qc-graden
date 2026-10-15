@@ -5,6 +5,7 @@ const { BELONG_WHOLEHOUSE, WHOLEHOUSE_SUBS } = require('../../utils/wholehouse')
 const att = require('../../utils/attachment')
 const write = require('../../utils/write')
 const { joinNames, normalizeIds } = require('../../utils/arrayId')
+const { formatLocal } = require('../../utils/time')
 
 const CATEGORIES = ['主材', '辅材', '家具', '家电', '软装']
 const STATUS = ['to_buy', 'bought', 'on_site']
@@ -89,7 +90,7 @@ Page({
       .order('created_at', { ascending: false }).limit(20)
     this.setData({
       revisions: (data || []).map((r) => ({
-        timeText: String(r.created_at || '').slice(0, 16).replace('T', ' ') || '—',
+        timeText: formatLocal(r.created_at, 'datetime') || '—',
         actionText: r.action === 'update' ? '修改' : r.action === 'create' ? '创建' : (r.action || '操作'),
         newVersion: r.new_version || '',
       })),

@@ -148,7 +148,7 @@
       <view wx:for="{{recent}}" wx:key="id" class="card slim slim-row" bindtap="goEditItem" data-id="{{item.id}}">
         <view class="slim-main">
           <text class="slim-title">{{item.remark || item.typeName}}</text>
-          <text class="slim-meta">{{item.pay_date}} · {{item.typeName}}<block wx:if="{{item.attCount}}"> · 附件{{item.attCount}}</block></text>
+          <text class="slim-meta">{{item.pay_date}}<text wx:if="{{item.timeText}}"> {{item.timeText}}</text> · {{item.typeName}}<block wx:if="{{item.attCount}}"> · 附件{{item.attCount}}</block></text>
         </view>
         <view class="slim-right">
           <text class="slim-amount">{{item.amountText}}</text>

@@ -26,7 +26,10 @@
   <block wx:for="{{groups}}" wx:key="date" wx:for-item="group">
     <view class="muted" style="margin:20rpx 0 12rpx;font-weight:600">{{group.date}}</view>
     <view wx:for="{{group.items}}" wx:key="id" class="card" bindtap="goDetail" data-id="{{item.id}}">
-      <view class="title-serif" style="font-size:30rpx">{{item.title}}</view>
+      <view class="between">
+        <view class="title-serif" style="font-size:30rpx;flex:1;min-width:0">{{item.title}}</view>
+        <view wx:if="{{item.timeText}}" class="muted" style="font-size:22rpx;flex-shrink:0;margin-left:12rpx">{{item.timeText}}</view>
+      </view>
       <view class="muted" style="margin-top:6rpx" wx:if="{{item.summary}}">{{item.summary}}…</view>
       <view class="muted" style="margin-top:6rpx" wx:if="{{item.imageCount}}">📷 {{item.imageCount}} 张</view>
     </view>

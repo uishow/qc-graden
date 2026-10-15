@@ -6,6 +6,7 @@ const { BELONG_WHOLEHOUSE, isWholeHouseLike, isWholeHouseStage } = require('../.
 const { exportExpensesTabCsv, exportMaterialsTabCsv, exportWholeHouseTabCsv } = require('../../utils/exportCsv')
 const cache = require('../../utils/cache')
 const write = require('../../utils/write')
+const { formatLocal } = require('../../utils/time')
 
 const app = getApp()
 
@@ -304,6 +305,7 @@ Page({
         typeName: TYPE_NAMES[e.type] || '其他',
         amountText: fen2yuan(e.amount),
         attCount: (e.attachments || []).length,
+        timeText: formatLocal(e.created_at, 'time'),
       })),
       matEmpty: mat.length === 0,
       matTotalText: fen2yuan(planTotal),

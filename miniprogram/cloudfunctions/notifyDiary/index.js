@@ -9,6 +9,33 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 // 注意：thing 类型限 20 字（超长会 47003），统一截断；page 不能以 / 开头。
 const TEMPLATE_ID = 'd7KlYUn-ZiAtiSr3kuRkiD2qYbYygi0T_6kLxYTMMTk'
 
+// 时间格式化（内联，强制 UTC+8）：云函数运行在云端容器默认 UTC，
+//   直接截 ISO 串给用户会差 8 小时。这里手动 +8h 与前端 utils/time.js 保持一致。
+//   不与 miniprogram/utils/time.js 共用是因为云函数目录独立，没有打包共享工具。
+const TZ_OFFSET_MS = 8 * 3600 * 1000
+const pad2 = (n) => (n < 10 ? '0' + n : '' + n)
+function formatLocal(iso, format) {
+  format = format || 'datetime'
+  const s = String(iso == null ? '' : iso).trim()
+  if (!s) return format === 'date' ? '' : '—'
+  const d = new Date(s)
+  if (isNaN(d.getTime())) {
+    if (format === 'date') return s.slice(0, 10) || ''
+    if (format === 'time') return (s.match(/T(\d{2}:\d{2})/) || [, ''])[1] || ''
+    return s.slice(0, 16).replace('T', ' ') || s.slice(0, 16) || '—'
+  }
+  const t = new Date(d.getTime() + TZ_OFFSET_MS)
+  const Y = t.getUTCFullYear()
+  const M = pad2(t.getUTCMonth() + 1)
+  const D = pad2(t.getUTCDate())
+  const h = pad2(t.getUTCHours())
+  const m = pad2(t.getUTCMinutes())
+  if (format === 'date') return Y + '-' + M + '-' + D
+  if (format === 'time') return h + ':' + m
+  if (format === 'short') return M + '-' + D + ' ' + h + ':' + m
+  return Y + '-' + M + '-' + D + ' ' + h + ':' + m
+}
+
 function cut20(v) {
   const s = String(v || '').replace(/\s+/g, ' ').trim()
   return s.length > 20 ? s.slice(0, 19) + '…' : s
@@ -30,7 +57,7 @@ exports.main = async (event) => {
     ])
     const authorName = (profRes.data && profRes.data[0] && profRes.data[0].nick_name) || '家人'
     const projName = (projRes.data && projRes.data.name) || ''
-    const timeStr = String(d.created_at || '').slice(0, 16).replace('T', ' ') || String(d.diary_date || '')
+    const timeStr = formatLocal(d.created_at, 'datetime') || String(d.diary_date || '')
 
     const targets = (memRes.data || []).filter((m) => m.user_id && m.user_id !== d.last_editor_id)
     let sent = 0
