@@ -23,3 +23,93 @@
 .member-row { display: flex; align-items: center; justify-content: space-between; padding: 14rpx 0; border-top: 1rpx solid var(--c-card-border); }
 .member-main { min-width: 0; flex: 1; }
 
+/* ============================================================
+ * 常用功能：4 行等高卡片（全部不带图标，单一视觉密度）
+ *   - .func-row / .func-row-quart / .func-row-full 都是 min-height: 110rpx
+ *   - .func-row-quart 内部 3 列等分 + 竖分隔线
+ *   - .func-row-full 内部单 cell + chevron
+ * ============================================================ */
+.func-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 110rpx;
+  padding: 0;
+}
+
+/* 单元格：纯文字版（无图标），左侧主文字 + 下方副文，垂直居中 */
+.func-cell {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx 22rpx;
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 1;
+}
+.func-cell + .func-cell { border-left: 1rpx solid var(--c-card-border); }
+.func-cell-pure { /* 单 cell 撑满，无竖分隔 */ border-left: none !important; }
+
+/* func-row-quart 紧凑行：3 列等分 + 内容上下两行 */
+.func-row-quart .func-cell { padding: 18rpx 22rpx; }
+
+/* func-row-full 整行：左 cell 占满 + 右侧 chevron */
+.func-row-full {
+  padding: 0 22rpx 0 0;
+}
+.func-row-full .func-cell {
+  padding: 16rpx 22rpx;
+}
+.func-cell-chevron {
+  padding: 0 12rpx 0 8rpx;
+  font-size: 36rpx;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.func-cell-main { min-width: 0; flex: 1; }
+.func-cell-label { font-size: 28rpx; color: var(--c-text); line-height: 1.3; }
+.func-cell-sub {
+  font-size: 22rpx;
+  line-height: 1.3;
+  margin-top: 4rpx;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+  color: var(--c-text-2);
+}
+.func-cell-sub.muted { color: var(--c-text-2); }
+
+/* ============================================================
+ * 外观主题色点：未选中「实色圆球」；选中「放大 + 主色光环 + ✓ 标记」
+ * ============================================================ */
+.theme-dot {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  border: 2rpx solid var(--c-card-border);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, width .15s ease, height .15s ease;
+}
+.theme-dot.theme-a { background: #8C5A3B; }
+.theme-dot.theme-b { background: #3E3E42; }
+
+.theme-dot.theme-dot-on {
+  width: 48rpx;
+  height: 48rpx;
+  box-shadow: 0 0 0 4rpx var(--c-primary), 0 2rpx 6rpx rgba(0,0,0,.18);
+  border-color: rgba(255,255,255,.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.theme-dot.theme-dot-on::after {
+  content: '✓';
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 1;
+}

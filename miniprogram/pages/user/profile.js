@@ -14,6 +14,8 @@ Page({
     currentProjectId: null,
     myOpenid: null,
     myNick: '', // 自己的昵称（profiles.nick_name，login 云函数 setNick 修改）
+    // 本地展示用：上一次反馈提交时间（feedback/edit.js 成功时写入）
+    lastFeedbackAt: '',
     // 昵称设置弹窗
     showNick: false,
     nickValue: '',
@@ -47,8 +49,15 @@ Page({
       this._kbHandler = (res) => { this.setData({ kbHeight: (res && res.height) || 0 }) }
       wx.onKeyboardHeightChange(this._kbHandler)
     }
+    // 上一次反馈提交时间（feedback 页面提交成功后写入 storage）
+    // 这是本地数据，不需要登录就能读；onShow 每次重新读取，让用户看到最新状态
+    let lastFeedbackAt = ''
+    try {
+      const iso = wx.getStorageSync('lastFeedbackAt')
+      if (iso) lastFeedbackAt = String(iso).slice(0, 16).replace('T', ' ')
+    } catch (e) { /* storage 不可用则忽略 */ }
     const session = await app.ready()
-    this.setData({ signedIn: !!session, currentProjectId: store.getCurrentProjectId() })
+    this.setData({ signedIn: !!session, currentProjectId: store.getCurrentProjectId(), lastFeedbackAt })
     if (!session) return
     const openid = session.id
     this.setData({ myOpenid: openid })
@@ -118,6 +127,22 @@ Page({
   },
   goRoom() {
     wx.navigateTo({ url: '/pages/room/manage' })
+  },
+  // AI 助手：跳转独立页（pages/ai/assistant，单轮问答 + 共享 LLM 配置）
+  goAIAssistant() {
+    if (!store.getCurrentProjectId()) {
+      wx.showToast({ title: '请先创建或加入一个项目', icon: 'none' })
+      return
+    }
+    wx.navigateTo({ url: '/pages/ai/assistant' })
+  },
+  // APP 评价与意见：跳转独立页（pages/feedback/edit，三维 5 分评分 + 意见框）
+  goFeedback() {
+    wx.navigateTo({ url: '/pages/feedback/edit' })
+  },
+  // 我的反馈历史：普通用户看自己 / 管理员可看全员（在 pages/feedback/list 内部按角色自动切换）
+  goFeedbackList() {
+    wx.navigateTo({ url: '/pages/feedback/list' })
   },
   setThemeA() { this.switchTheme('theme-a') },
   setThemeB() { this.switchTheme('theme-b') },

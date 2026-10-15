@@ -1,0 +1,62 @@
+<view class="page-root {{theme}}">
+
+  <view class="title-serif" style="margin-bottom:8rpx">反馈历史</view>
+  <view class="muted" style="margin-bottom:20rpx">
+    <block wx:if="{{isManager}}">管理员可切换查看「我的反馈」或「全员反馈」</block>
+    <block wx:else>查看自己提交过的反馈记录</block>
+  </view>
+
+  <!-- 管理员切 tab：我的反馈 / 全员反馈 -->
+  <view wx:if="{{isManager}}" class="tabs">
+    <view class="tab {{scope === 'self' ? 'tab-on' : ''}}" data-scope="self" bindtap="switchScope">我的反馈</view>
+    <view class="tab {{scope === 'all' ? 'tab-on' : ''}}" data-scope="all" bindtap="switchScope">全员反馈</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="empty">加载中…</view>
+  <view wx:elif="{{list.length === 0}}" class="empty">{{emptyText || '暂无反馈'}}    </view>
+
+  <block wx:else>
+    <view wx:for="{{list}}" wx:key="id" class="card fb-item">
+      <!-- 顶部：时间 + openid 后 4 位（全员模式显示） -->
+      <view class="between">
+        <view class="muted">{{item.timeText}}</view>
+        <view wx:if="{{scope === 'all'}}" class="muted" style="font-size:22rpx">用户 ···{{item.openidTail}}</view>
+      </view>
+
+      <!-- 三维评分（5 星小星，按维度展示） -->
+      <view class="fb-row">
+        <view class="fb-dim">
+          <text class="muted">易用性</text>
+          <text class="fb-stars">
+            <text wx:for="{{5}}" wx:key="u{{index}}" class="fb-star {{item.scores.usability > index ? 'fb-star-on' : ''}}">★</text>
+          </text>
+        </view>
+        <view class="fb-dim">
+          <text class="muted">美观性</text>
+          <text class="fb-stars">
+            <text wx:for="{{5}}" wx:key="a{{index}}" class="fb-star {{item.scores.aesthetics > index ? 'fb-star-on' : ''}}">★</text>
+          </text>
+        </view>
+        <view class="fb-dim">
+          <text class="muted">功能性</text>
+          <text class="fb-stars">
+            <text wx:for="{{5}}" wx:key="f{{index}}" class="fb-star {{item.scores.functionality > index ? 'fb-star-on' : ''}}">★</text>
+          </text>
+        </view>
+      </view>
+
+      <!-- 意见摘要 -->
+      <view wx:if="{{item.comment}}" class="fb-comment">{{item.comment}}</view>
+
+      <!-- 设备版本（最小化信息） -->
+      <view wx:if="{{item.system || item.app_version}}" class="muted fb-meta">
+        <block wx:if="{{item.system}}">{{item.system}}</block>
+        <block wx:if="{{item.app_version}}"> · v{{item.app_version}}</block>
+      </view>
+    </view>
+  </block>
+
+  <!-- 底部：「去写新反馈」入口 -->
+  <view class="btn-primary" style="margin-top:32rpx" bindtap="goWrite">写一条新反馈</view>
+
+</view>

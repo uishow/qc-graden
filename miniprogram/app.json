@@ -14,7 +14,10 @@
     "pages/knowledge/import",
     "pages/knowledge/chat",
     "pages/stage/board",
-    "pages/room/manage"
+    "pages/room/manage",
+    "pages/feedback/edit",
+    "pages/ai/assistant",
+    "pages/feedback/list"
   ],
   "window": {
     "backgroundColor": "#FAF6EF",

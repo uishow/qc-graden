@@ -1,0 +1,9 @@
+{
+  "name": "feedbackList",
+  "version": "1.0.0",
+  "description": "反馈历史查询：self=看自己 / all=管理员看全员（强制回落），需配合 app_feedback 安全规则 read=false",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

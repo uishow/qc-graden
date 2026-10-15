@@ -27,45 +27,83 @@
       <view class="card btn-outline flex1" bindtap="goJoin">输入邀请码加入</view>
     </view>
 
+    <!-- 常用功能：4 行·全部去掉图标·统一高度（行内 3 列紧凑：昵称+外观+AI设置；行内 3 列：房间+导出+AI管家；2 个整行：评价与意见+反馈历史） -->
     <view style="font-weight:600;margin:32rpx 0 12rpx">常用功能</view>
-    <view class="card between" bindtap="openNick">
-      <view class="row" style="gap:16rpx">
-        <view style="font-size:30rpx">👤</view>
-        <view>我的昵称</view>
+
+    <!-- 第 1 行（3 列紧凑）：我的昵称 / APP 外观 / AI 设置（仅管理员） -->
+    <view class="card func-row func-row-quart" style="margin-bottom:16rpx">
+      <view class="func-cell" bindtap="openNick">
+        <view class="func-cell-main">
+          <view class="func-cell-label">我的昵称</view>
+          <view class="func-cell-sub muted">{{myNick || '未设置'}}</view>
+        </view>
       </view>
-      <view class="muted">{{myNick || '未设置 · 点此设置 ›'}}</view>
-    </view>
-    <view class="card between" bindtap="goRoom">
-      <view class="row" style="gap:16rpx">
-        <view style="font-size:30rpx">🚪</view>
-        <view>房间管理</view>
+      <view class="func-cell">
+        <view class="func-cell-main">
+          <view class="func-cell-label">APP 外观</view>
+          <view class="func-cell-sub">
+            <view class="theme-dot theme-a {{theme === 'theme-a' ? 'theme-dot-on' : ''}}" bindtap="setThemeA"></view>
+            <view class="theme-dot theme-b {{theme === 'theme-b' ? 'theme-dot-on' : ''}}" bindtap="setThemeB"></view>
+          </view>
+        </view>
       </view>
-      <view class="muted">›</view>
-    </view>
-    <view class="card between" bindtap="goExport">
-      <view class="row" style="gap:16rpx">
-        <view style="font-size:30rpx">📤</view>
-        <view>导出费用数据</view>
+      <view wx:if="{{isAnyManager}}" class="func-cell" bindtap="openAI">
+        <view class="func-cell-main">
+          <view class="func-cell-label">AI 设置</view>
+          <view class="func-cell-sub muted">{{aiConfigured ? '已配置' : '点击配置'}}</view>
+        </view>
       </view>
-      <view class="muted">CSV · ›</view>
-    </view>
-    <view wx:if="{{isAnyManager}}" class="card between" bindtap="openAI">
-      <view class="row" style="gap:16rpx">
-        <view style="font-size:30rpx">🤖</view>
-        <view>AI 设置</view>
+      <!-- 占位避免「非管理员」时第 3 格塌陷 -->
+      <view wx:if="{{!isAnyManager}}" class="func-cell">
+        <view class="func-cell-main">
+          <view class="func-cell-label muted">仅管理员可见</view>
+          <view class="func-cell-sub"> </view>
+        </view>
       </view>
-      <view class="muted">{{aiKeyTail ? '已配置 · 尾' + aiKeyTail + ' ›' : '未配置 · ›'}}</view>
     </view>
 
-    <view class="card between">
-      <view class="row" style="gap:16rpx">
-        <view style="font-size:30rpx">🎨</view>
-        <view>外观</view>
+    <!-- 第 2 行（3 列紧凑）：房间管理 / 导出费用 / AI 管家（去图标 + 等高，加 sub 文案） -->
+    <view class="card func-row" style="margin-bottom:16rpx">
+      <view class="func-cell" bindtap="goRoom">
+        <view class="func-cell-main">
+          <view class="func-cell-label">房间管理</view>
+          <view class="func-cell-sub muted">管理工地房间</view>
+        </view>
       </view>
-      <view class="row" style="gap:20rpx">
-        <view style="width:44rpx;height:44rpx;border-radius:50%;background:#8C5A3B;{{theme==='theme-a'?'box-shadow:0 0 0 3rpx var(--c-primary);':''}}" bindtap="setThemeA"></view>
-        <view style="width:44rpx;height:44rpx;border-radius:50%;background:#3E3E42;{{theme==='theme-b'?'box-shadow:0 0 0 3rpx var(--c-primary);':''}}" bindtap="setThemeB"></view>
+      <view class="func-cell" bindtap="goExport">
+        <view class="func-cell-main">
+          <view class="func-cell-label">导出费用</view>
+          <view class="func-cell-sub muted">导出当前项目数据</view>
+        </view>
       </view>
+      <view class="func-cell" bindtap="goAIAssistant">
+        <view class="func-cell-main">
+          <view class="func-cell-label">AI 管家</view>
+          <view class="func-cell-sub muted">问 AI 装修管家</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 第 3 行（整行）：APP 评价与意见（sub 行展示上次反馈时间，没有就不显示） -->
+    <view class="card func-row func-row-full" style="margin-bottom:16rpx" bindtap="goFeedback">
+      <view class="func-cell func-cell-pure">
+        <view class="func-cell-main">
+          <view class="func-cell-label">APP 评价与意见</view>
+          <view class="func-cell-sub muted">{{lastFeedbackAt ? '上次反馈：' + lastFeedbackAt : '给作者反馈、打分、提建议'}}</view>
+        </view>
+      </view>
+      <view class="muted func-cell-chevron">›</view>
+    </view>
+
+    <!-- 第 4 行（整行）：我的反馈历史（普通用户看自己 / 管理员可看全员） -->
+    <view class="card func-row func-row-full" bindtap="goFeedbackList">
+      <view class="func-cell func-cell-pure">
+        <view class="func-cell-main">
+          <view class="func-cell-label">我的反馈历史</view>
+          <view class="func-cell-sub muted">{{isAnyManager ? '管理员可查看全员反馈' : '看我发过的反馈记录'}}</view>
+        </view>
+      </view>
+      <view class="muted func-cell-chevron">›</view>
     </view>
 
     <view class="muted" style="margin-top:40rpx;text-align:center">装修日记本 · 设计文档 V1.0</view>
