@@ -11,6 +11,61 @@ function fen2yuan(fen, withComma) {
   return v ? v.toLocaleString('zh-CN') : '0'
 }
 
+// —— 中文数字映射（数量/日期共用）——
+const CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 }
+
+// —— 从文本里匹配「项目已知名字」（房间/阶段）转 id 数组 ——
+// 策略：文本包含某名字子串即命中；名字按长度降序匹配，长名优先（避免「卫生」误中「卫生间」）
+function matchNameIds(text, list, field) {
+  const ids = []
+  if (!list || !list.length) return ids
+  const sorted = list.slice().sort((a, b) => String(b[field] || '').length - String(a[field] || '').length)
+  sorted.forEach((item) => {
+    const n = String(item[field] || '').trim()
+    if (n && n.length >= 2 && text.indexOf(n) !== -1) ids.push(item.id)
+  })
+  return ids
+}
+
+// —— 从文本提取日期 → YYYY-MM-DD ——
+// 支持：今天/昨天/前天/大前天/明天/后天/上周X/这周X/本月X号/具体日期(10月15日 / 2026-10-15)
+function parseDateFromText(text, todayDate) {
+  const d = todayDate ? new Date(todayDate + 'T00:00:00') : new Date()
+  const pad = (n) => (n < 10 ? '0' + n : '' + n)
+  const fmt = (dt) => dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate())
+  // 具体日期 2026-10-15
+  const iso = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (iso) {
+    const m = Number(iso[2]); const day = Number(iso[3])
+    if (m >= 1 && m <= 12 && day >= 1 && day <= 31) return fmt(new Date(Number(iso[1]), m - 1, day))
+  }
+  // 中文日期 X月X日
+  const cn = text.match(/(\d{1,2})月(\d{1,2})[日号]/)
+  if (cn) {
+    const m = Number(cn[1]); const day = Number(cn[2])
+    if (m >= 1 && m <= 12 && day >= 1 && day <= 31) return fmt(new Date(d.getFullYear(), m - 1, day))
+  }
+  if (/大前天/.test(text)) { d.setDate(d.getDate() - 3); return fmt(d) }
+  if (/前天/.test(text)) { d.setDate(d.getDate() - 2); return fmt(d) }
+  if (/昨天|昨日/.test(text)) { d.setDate(d.getDate() - 1); return fmt(d) }
+  if (/后天/.test(text)) { d.setDate(d.getDate() + 2); return fmt(d) }
+  if (/明天|明日/.test(text)) { d.setDate(d.getDate() + 1); return fmt(d) }
+  // 上周X / 这周X / 本周X
+  const wk = text.match(/(上|这|本)周([日一二三四五六天])/)
+  if (wk) {
+    const base = wk[1] === '上' ? -7 : 0
+    const map = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
+    const target = map[wk[2]] != null ? map[wk[2]] : 0
+    const cur = d.getDay()
+    let diff = target - cur + base
+    // 上周：取最近的过去那周
+    if (wk[1] === '上' && diff >= 0) diff -= 7
+    d.setDate(d.getDate() + diff)
+    return fmt(d)
+  }
+  return fmt(new Date())
+}
+
 // —— 把 ID 数组转名字（专用于快照里嵌 roomNames/stageNames）——
 function namesOfIds(arr, itemMap) {
   const ids = normalizeIds(arr)
@@ -364,44 +419,53 @@ Page({
     this.setData({ messages, input: '', loading: true, lastId: 'msg' + (messages.length - 1) })
     const projectId = store.getCurrentProjectId()
 
-    // ★ 2026-10-15：系统数据录入快捷指令（「录入材料：欧派木门 3 张 300/张」）
-    //   不走 LLM，直接正则解析 + write.insert('materials')，把结果作为 AI 回复气泡
-    //   让 LLM 不可用 / 未配置时也能录入；后续如要做日记/花费等再扩
-    if (projectId) {
-      const intake = tryParseIntakeMaterial(text)
-      if (intake) {
-        const reply = await this._handleIntakeMaterial(intake)
-        const next = this.data.messages.concat([{ role: 'ai', text: reply }])
-        this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })
-        return
-      }
+    // 统一收尾：无论成功/失败/异常都复位 loading，避免 UI 卡死（2026-10-15 修：裸调 tryParseIntakeMaterial 抛错未捕获导致死机）
+    const finish = (replyText) => {
+      const next = this.data.messages.concat([{ role: 'ai', text: String(replyText || '回答失败，请重试') }])
+      this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })
     }
 
-    let result = null
     try {
-      const res = await wx.cloud.callFunction({
-        name: 'aiAssistant',
-        data: { question: text, projectId, snapshot: this.data.snapshot, projectName: this.data.snapshotView.projectName || '' },
-      })
-      result = res && res.result
+      // ★ 系统数据录入快捷指令（「录入材料：欧派木门 3 张 300/张」）
+      //   不走 LLM，直接正则解析 + write.insert('materials')，把结果作为 AI 回复气泡
+      //   让 LLM 不可用 / 未配置时也能录入；后续如要做日记/花费等再扩
+      if (projectId) {
+        const intake = this.tryParseIntakeMaterial(text)
+        if (intake) {
+          const reply = await this._handleIntakeMaterial(intake)
+          finish(reply)
+          return
+        }
+      }
+
+      let result = null
+      try {
+        const res = await wx.cloud.callFunction({
+          name: 'aiAssistant',
+          data: { question: text, projectId, snapshot: this.data.snapshot, projectName: this.data.snapshotView.projectName || '' },
+        })
+        result = res && res.result
+      } catch (e) {
+        const detail = String((e && (e.errCode || e.errMsg || e.message)) || '').slice(0, 60)
+        result = { ok: false, message: '调用失败：' + (detail || '网络异常') }
+      }
+      const fallback = '回答失败，请重试'
+      const answer = result && result.ok ? (result.answer || fallback) : (result && result.message) || fallback
+      // 透传 AI 降级原因 + 让用户知道是降级结果
+      // reason: 'not_configured' | 'call_failed' | 'empty_reply' | ''
+      let extra = ''
+      if (result && result.ok && result.ai === false && result.reason) {
+        const tip = result.reason === 'not_configured'
+          ? '（AI 未配置大模型，请前往「我的 → AI 设置」）'
+          : result.reason === 'call_failed'
+            ? '（AI 调用失败：' + (result.aiError || '未知原因') + '）'
+            : '（AI 返回为空，已用项目现状兜底）'
+        extra = '\n\n' + tip
+      }
+      finish(answer + extra)
     } catch (e) {
-      const detail = String((e && (e.errCode || e.errMsg || e.message)) || '').slice(0, 60)
-      result = { ok: false, message: '调用失败：' + (detail || '网络异常') }
+      // 任何未预期异常都复位 loading，绝不卡死
+      finish('抱歉，处理出错了：' + (e && e.message ? e.message : '未知错误'))
     }
-    const fallback = '回答失败，请重试'
-    const answer = result && result.ok ? (result.answer || fallback) : (result && result.message) || fallback
-    // 透传 AI 降级原因 + 让用户知道是降级结果
-    // reason: 'not_configured' | 'call_failed' | 'empty_reply' | ''
-    let extra = ''
-    if (result && result.ok && result.ai === false && result.reason) {
-      const tip = result.reason === 'not_configured'
-        ? '（AI 未配置大模型，请前往「我的 → AI 设置」）'
-        : result.reason === 'call_failed'
-          ? '（AI 调用失败：' + (result.aiError || '未知原因') + '）'
-          : '（AI 返回为空，已用项目现状兜底）'
-      extra = '\n\n' + tip
-    }
-    const next = this.data.messages.concat([{ role: 'ai', text: answer + extra }])
-    this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })
   },
 })
