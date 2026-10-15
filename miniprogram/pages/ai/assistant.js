@@ -14,6 +14,10 @@ function fen2yuan(fen, withComma) {
 // —— 中文数字映射（数量/日期共用）——
 const CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 }
 
+// 材料类型词（用于从「品牌+类型」组合名里拆品牌，如 欧派木门→品牌欧派/类型木门）。按长度降序优先匹配长词。
+const MAT_TYPE_KEYWORDS = ['整体橱柜','定制衣柜','集成吊顶','乳胶漆','美缝剂','填缝剂','大理石','石膏板','腻子粉','防盗门','推拉门','淋浴房','浴霸','铝扣板','踢脚线','门槛石','玻璃胶','密封胶','开关插座','水龙头','花洒','水槽','门锁','合页','导轨','置物架','地漏','角阀','软管','壁纸','壁布','油漆','涂料','木门','地板','瓷砖','橱柜','衣柜','沙发','床垫','床架','马桶','龙头','开关','插座','灯具','水管','电线','石材','水泥','地毯','窗帘','门','漆','砖']
+  .sort((a, b) => b.length - a.length)
+
 // —— 从文本里匹配「项目已知名字」（房间/阶段）转 id 数组 ——
 // 策略：文本包含某名字子串即命中；名字按长度降序匹配，长名优先（避免「卫生」误中「卫生间」）
 function matchNameIds(text, list, field) {
@@ -345,8 +349,10 @@ Page({
     const priceReA = new RegExp(`(?:单价\\s*)?(\\d+(?:\\.\\d+)?)\\s*(?:元|块|块钱)?\\s*[/一每]?\\s*(?:${unitList})`, 'i')
     const priceReB = new RegExp(`每\\s*(?:${unitList})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:元|块|块钱)?`, 'i')
     const priceReC = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/
+    const priceReD = /(?:单价|总价|合计)\s*(\d+(?:\.\d+)?)/ // 单价/总价/合计 后直接跟数字（省略 元/单位）
     let aMatch = afterQty.match(priceReA) || afterQty.match(priceReB)
     if (!aMatch) aMatch = afterQty.match(priceReC)
+    if (!aMatch) aMatch = afterQty.match(priceReD)
     // ★ 「共/一共/总共/合计/总价/花了」是总价强信号，必须先于裸 priceReC 命中，避免把总价当成单价
     const bMatch = body.match(/(共|一共|总共|合计|总价|花了|花)\s*(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/i)
     let unitPriceFen = 0
@@ -368,12 +374,19 @@ Page({
     // 裸「共/一共/总价/合计」若 bMatch 没命中（比如后面没跟数字）作为孤立修饰剥掉
     name = name.replace(/(?:^|\s)(?:一共|总共|合计|总价)(?:\s|$)/g, ' ')
     name = name.replace(/[，,。.；;]+/g, ' ')
-    name = name.replace(/\s+/g, ' ')
-    .trim()
+    name = name.replace(/\s+/g, ' ').trim()
     if (!name || name.length < 2) return null
+
+    // 从「品牌+类型」组合名拆出品牌（如 欧派木门 → brand=欧派, name=木门）
+    let brand = ''
+    for (const kw of MAT_TYPE_KEYWORDS) {
+      const idx = name.indexOf(kw)
+      if (idx >= 2) { brand = name.slice(0, idx); name = name.slice(idx); break }
+    }
 
     return {
       name,
+      brand,
       quantity,
       unit,
       unit_price: unitPriceFen,
@@ -394,7 +407,7 @@ Page({
       const data = {
         name: intake.name,
         category: '其他',
-        brand: '',
+        brand: intake.brand || '',
         spec: '',
         quantity: intake.quantity,
         unit: intake.unit,
@@ -452,6 +465,7 @@ Page({
   // —— 意图识别：材料 / 花费 / 日记 / null（非录入）——
   detectIntent(text) {
     const t = String(text || '')
+    const isQuestion = /[?？]|怎么|如何|为什么|为何|啥|哪|多少|几|查询|统计|分析|看看|吗\s*$|呢\s*$/.test(t)
     const hasMat = /录入|添加|登记|加一笔|材料|建材|清单/.test(t)
     const hasDiary = /记日记|写日记|记一篇日记|记录日记|日记/.test(t)
     const hasExp = /记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了|花\b/.test(t)
@@ -459,13 +473,15 @@ Page({
     const amt = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/.test(t)
     const pricey = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)|单价|总价|合计|每/.test(t)
     const hasDate = /今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2})/.test(t)
-    if (hasMat) return 'material'
-    if (hasDiary) return 'diary'
+    const knownName = this._matchRoomIds(t).length > 0 || this._matchStageIds(t).length > 0
+    if (hasMat && !isQuestion) return 'material'
+    if (hasDiary && !isQuestion) return 'diary'
     if (qty && pricey) return 'material' // 欧派木门三张 300一张
-    if (hasExp && amt) return 'expense'
+    if (hasExp && amt) return 'expense' // 有金额 = 录入花费
     if (hasExp && qty) return 'material' // 记一笔瓷砖 10块（无价格按材料上下文）
-    if (hasExp) return 'expense'
-    if (hasDate && !amt) return 'diary' // 今天…叙述
+    if (hasExp && !isQuestion) return 'expense' // 记一笔（纯录入指令）
+    if (hasDate && !amt && !isQuestion) return 'diary' // 今天…叙述（非提问）
+    if (knownName && !isQuestion && !amt && !qty) return 'diary' // 提到已知房间/阶段 + 叙述 → 日记
     return null
   },
 
@@ -500,13 +516,20 @@ Page({
     let body = text
     body = body.replace(/(记日记|写日记|记一篇日记|记录日记|日记|记录|记一下|记一笔)/g, ' ')
     body = body.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
-    ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) body = body.split(n).join(' ') })
-    ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) body = body.split(n).join(' ') })
-    body = body.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
-    if (!body || body.length < 2) return null
-    const firstSentence = body.split(/[。！？\n]/)[0].trim()
-    const title = (firstSentence || body).slice(0, 20) || '日记'
-    return { title, content: body, diary_date: diaryDate, room_ids: roomIds, stage_ids: stageIds, original: text.trim() }
+    // 已知房间/阶段名仅当剥离后正文仍有内容时才移除，避免正文被掏空导致解析失败
+    let stripped = body
+    ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) stripped = stripped.split(n).join(' ') })
+    ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) stripped = stripped.split(n).join(' ') })
+    stripped = stripped.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+    let content = stripped
+    if (content.length < 4) {
+      // 正文被房间/阶段名掏空 → 保留它们作为正文内容
+      content = body.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+    }
+    if (!content || content.length < 2) content = text.trim() // 终极兜底：整句当正文
+    const firstSentence = content.split(/[。！？\n]/)[0].trim()
+    const title = (firstSentence || content).slice(0, 20) || '日记'
+    return { title, content, diary_date: diaryDate, room_ids: roomIds, stage_ids: stageIds, original: text.trim() }
   },
 
   // —— 录入统一分发：先用启发式，失败且 LLM 已配则走 LLM 兜底提取 ——
@@ -796,13 +819,7 @@ Page({
       // ★ 系统数据录入快捷指令（材料/日记/花费）：启发式解析 → write.insert，不走 LLM
       //   未命中且 LLM 已配时走 LLM 兜底提取；让 LLM 不可用 / 未配置时也能录入
       if (projectId) {
-        const intent = this.detectIntent(text)
-        if (intent) {
-          const reply = await this._handleEntry(intent, text)
-          finish(reply)
-          return
-        }
-        // 多维分析：正则识别常见问法 → 客户端真实聚合 → 格式化文本（离线可用）
+        // 多维分析查询优先于录入意图：避免「本月花费多少」因含「花费」被误判为花费录入
         if (this.data.raw) {
           const stats = this.computeStats()
           const quick = this._routeQuery(text, stats)
@@ -810,6 +827,12 @@ Page({
             finish(quick)
             return
           }
+        }
+        const intent = this.detectIntent(text)
+        if (intent) {
+          const reply = await this._handleEntry(intent, text)
+          finish(reply)
+          return
         }
       }
 
