@@ -1,49 +1,50 @@
 # 项目长期记忆 (qc-graden)
 
 ## 协作约定
-- 改代码前先给用户方案确认，不擅自动手（用户 2026-10-07 明确要求）。涉及多文件或有歧义时先列选项让用户拍板，再写代码。
+- 改代码前先给用户方案确认，不擅自动手（用户 2026-10-07 明确要求）。涉及多文件或有歧义时先列选项。
 
 ## 架构要点
-- 微信原生小程序 + CloudBase 文档型数据库；适配层 utils/cloud.js 把 supabase 风格链式 API 映射到云开发（order 默认升序；neq 用于软删过滤；eq('id')→_id）。
-- 软删：expenses/diaries 用 deleted:true；materials 硬删。插入须补 deleted:false、version:1、created_at。
-- **附件**：expenses/materials 均有 `attachments: [{fileID,name,kind:'image'|'file'}]`（2026-10-08 加），通用工具 `utils/attachment.js`（choose/upload/previewImages/openFile，上限 9）；编辑页 budget/edit + material/edit 各有附件区；overview 列表有「附件N」角标。前端直传 wx.cloud.uploadFile；删除仅移除引用不删文件；fileID 不能直接 previewImage，须先 getTempFileURL。
-- 花费页(budget/overview)为 tabBar 页，承载「花费」与「材料」两个标签。**已花费口径（2026-10-08 统一）**：非材料手动花费 + 已购买(bought)/已进场(on_site)材料合计；待购买(to_buy)不计入，推进后数字才变化；首页与花费页同口径（首页/花费页材料合计卡均显示「已购/待购」拆分）；全屋定制归集总额仍按清单全量。材料编辑子页 material/edit（用 navigateTo 进入）。**「单一真源」已拍板 = A+C（2026-10-09）**：维持 B 防重模型（不自动建/删 expenses）；budget/edit.js 保存前对材料清单按「金额一致 + 2 字滑窗文本交集」查重，命中弹「可能重复计入」确认框，确认后仍可保存（只提示不拦截）。
-- 花费页是 tabBar 页，外部跳转用 wx.switchTab + store.setBudgetTab 暂存目标子标签，onShow 读取后清除（navigateTo 不能跳 tabBar 页）。
-- **自定义 tabBar**（2026-10-08，选中项=主题色高亮胶囊）：app.json `tabBar.custom:true` + `custom-tab-bar/` 四件套；各 tab 页 onShow 必须调 `store.applyTabBar(this, 序号)`（0首页/1日记/2花费/3知识库/4我的）同步选中态与主题；新增 tab 页要同步改 custom-tab-bar list 与序号。组件内拿不到 page-root 的 CSS 变量，主题色在组件 wxss 自定义。**`.bar` 必须自带 `position:fixed;left/right/bottom:0` 钉底**（2026-10-09 加，官方模板同款）：纯靠框架包装层定位时，包装层被重编译/键盘/原生节点增删搞乱会 tabBar 悬空半屏、下方漏页面底色（坑⑦的另一半根因）。图标为纯 CSS 几何形状（2026-10-09 用户手写，零图片资源）。
-- 安全规则（2026-10-09 改，2026-10-09 收口）：`diaries`/`expenses`/`materials` 写权限收为 `false`，所有增删改统一走云函数 `dataWrite`（管理员上下文绕过规则，落库前先查 `members` 确认 `user_id==OPENID && project_id && status=='active'`，非 active 成员返回 `code:NO_MEMBER` 拒绝）——堵死被移除成员手机残留 projectId 直接越权写入（实锤：已移除成员 M1… 仍写 '999' 日记 + '777' 花费）。客户端封装 `utils/write.js`（`write.insert/update/remove`，返回 `{data,error}` 同适配层）。`stages`/`rooms` 写仍 `true`（协同推进阶段/房间，二期待收紧）；`knowledge_articles`/`knowledge_comments`/`projects`/`members` 保持 `doc._openid==auth.openid`；`profiles`/`knowledge_categories`/`app_settings` 服务端独占（`false`）。`projects`/`members` 的写走 `joinProject`/`projectAdmin`。**owner 在 create.js 已插入 `members(role:'owner',status:'active')`，dataWrite 校验不会误伤创建者（已核实）**。
-- **项目可见性 = 邀请码授权模式**（2026-10-09，由「全员可见」反转）：每个项目两种 6 位永久邀请码 `invite_code_family`(家庭码·加入得 `family`·全权限) / `invite_code_member`(协作码·加入得 `member`·仅协同编辑)，建项目时由 create.js 生成（两码互不相等），可各自重置（projectAdmin.regenCode）。加入走 `joinProject` 云函数（校验码→插 members(role,status:active)）。首页/我的/知识库均按本人 `members` 记录做隔离（不展示他人项目）；管理员(`owner`/`family`)可在「我的」页管理面板重置码/移除成员/退出/删除项目（projectAdmin）。角色：owner=管理员(可删项目)、family=家庭成员(全权限)、member=协作成员(仅编辑内容)。
-- 云函数目录是 miniprogram/cloudfunctions/（DevTools 项目根=miniprogram/，project.config.json 的 cloudfunctionRoot=cloudfunctions/）；切忌建到仓库根 cloudfunctions/，DevTools 不扫那个目录（2026-10-07 曾建错导致用户看不到）。
-- 标准施工阶段（`create.js` PRESET_STAGES / `syncStages.STAGES` 两处须一致，**共 10 段**）：准备→设计→主体拆改→水电改造→泥瓦工程→木工工程→油漆工程→安装阶段→软装进场→入住准备。**全屋定制已移出线性工序**（2026-10-09 确认），改为阶段看板按需手建的并行环节（从 `board?scope=wholehouse` 进入，key 一律 `customhome`）；新增线性阶段须两处同步改。阶段/名称识别：`wholehouse.js isWholeHouseStage`（key='customhome' 或名称含「全屋定制」/「定制」）；`board.js resolveStageKey` 含「定制」落 customhome，避开看板用户自建阶段占用的 key:'custom'。花费页全屋定制卡支持多阶段列表（2026-10-09 加）。
-- 正文抓取为**格式感知**（方案A，2026-10-08 拍板）：`htmlToText` 把 `h1-h6→## `、`ul→- `、`ol→n. `、`blockquote→> `、`strong→**…**` 转成详情页轻量 markdown 可渲染的标记，花式内联样式（颜色/字号）丢弃。ul/ol/li 必须**单趟正则+栈**解析（分开 replace 栈状态不连续，ol 会失效）。`enrichArticle` 支持 `force:true` 覆盖重抓；详情页有「重新抓取正文」按钮（二次确认）。
-- 换大模型 = 只改云函数环境变量（`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`，OpenAI 兼容）；**环境变量按函数隔离**，配错函数/没保存/值带引号空格是常见坑（此路已被下行 app_settings 集中配置取代，env 仅兜底）。
-- 基础数据 vs 测试数据边界：基础=knowledge_categories(8 类，含全屋定制) + knowledge_articles(scope='official' 4 篇种子，由 init 写入)；测试=projects 及 members/stages/rooms/diaries/expenses/materials + knowledge_articles(scope='member' 成员导入)。清测试用 clearTestData 云函数（只删测试、不碰基础）。
-- **实时推送（M3-L1，2026-10-09 真机验证通过）**：diary/list（diaries）与 budget/overview（expenses+materials 双 watcher，500ms 去抖合并刷新）各自 `startWatch/stopWatch`——必须用 `wx.cloud.database().collection().where({project_id}).watch()` 客户端 SDK 直连（适配层不支持 watch）；onShow 开、onHide/onUnload 关（长连接不堆积）；load 加 `_loading` 重入守卫（overview 靠去抖即可）。
+- 微信原生小程序 + CloudBase 文档型数据库；适配层 `utils/cloud.js` 把 supabase 风格链式 API 映射到云开发（order 默认升序；neq 软删过滤；eq('id')→_id）。
+- 软删：expenses/diaries 用 `deleted:true`；materials 硬删。插入须补 `deleted:false`、`version:1`、`created_at`。
+- **附件**：expenses/materials 均有 `attachments:[{fileID,name,kind}]`，通用 `utils/attachment.js`；前端直传 `wx.cloud.uploadFile`，删除仅移除引用。
+- **已花费口径**：非材料手动花费 + 已购(bought)/已进场(on_site)材料合计；待购(to_buy)不计入。全屋定制归集按清单全量。
+- **自定义 tabBar**：`app.json tabBar.custom:true` + `custom-tab-bar/` 四件套；tab 页 onShow 必调 `store.applyTabBar(this,序号)`；`.bar` 必须自带 `position:fixed;left/right/bottom:0` 钉底（否则键盘/重编译会 tabBar 悬空半屏）。
+- **安全规则**：diaries/expenses/materials 写收为 false，增删改统一走云函数 `dataWrite`（落库前查 members 确认 active，非 active 返回 `NO_MEMBER`）。客户端封装 `utils/write.js`（`write.insert/update/remove`）。**部署顺序：先部署 dataWrite 验证，再把三张表规则改 false**。
+- **项目可见性 = 邀请码授权**：`invite_code_family`(family·全权限)/`invite_code_member`(member·协同)，由 create.js 生成，joinProject 加入；首页/我的/知识库按本人 members 隔离。
+- 云函数目录是 `miniprogram/cloudfunctions/`（DevTools 项目根=miniprogram/），勿建到仓库根 cloudfunctions/。
+- 标准施工阶段共 10 段（PRESET_STAGES + syncStages.STAGES 两处须一致）；全屋定制已移出线性工序，改阶段看板并行环节（key='customhome'）。
 
 ## 大模型（LLM）配置约定
-- **2026-10-09 起集中配置**：`app_settings` 集合（key='llm'，存 base_url/api_key/model）为唯一真源，「我的」页「AI 设置」弹窗（仅 owner/family 可见）经 `aiAdmin` 云函数读写，三个 AI 函数（enrichArticle/askAI/weeklyDigest）**共用一份，改一次全生效**；env 变量降级为兜底（集合没配时才用）。`app_settings` 安全规则 **read=false/write=false**（存密钥，客户端完全不可见），集合由 aiAdmin 首次保存时自动创建。API Key 不回显（只回尾 4 位），留空保存=不修改。
-- LLM 调用走 **OpenAI 兼容 HTTP**，地址自动补全 `/chat/completions`。未配置或调用失败 → 各函数独立降级（摘要：meta 抽取；问答：相关文章列表；周报：统计模板），**不影响主功能**；失败原因经 `aiError` 返回并在前端提示。
-- 云函数出口在国内：**OpenAI/Claude 直连不通、本机 Ollama/localhost 不可用**，须用国内服务（DeepSeek / 智谱GLM / 通义千问 / 混元 / Kimi / 硅基流动 / 火山方舟）。
-- 排查 AI 配置直接用前端提示的 aiError（信息最全）。曾短暂建过 `llmPing` 自检云函数，因太繁琐**用户要求已删除**（2026-10-08），不要再建议重建。
+- 集中配置 `app_settings`(key='llm'：base_url/api_key/model) 为唯一真源，「我的→AI 设置」经 `aiAdmin` 读写；env 变量降级兜底。安全规则 read/write=false（存密钥）。
+- LLM 走 OpenAI 兼容 HTTP（自动补 `/chat/completions`）；未配/失败各函数独立降级，不影响主功能。国内须用 DeepSeek/智谱/通义/混元/Kimi/硅基流动/火山（OpenAI/Claude 直连不通）。
+- 排查用前端 `aiError`。勿重建已删的 llmPing 自检函数。
 
-## 云函数部署检查清单（新增/改动被前端 wx.cloud.callFunction 调用的函数时，逐条核对）
-1. **目录三件套**：每个云函数目录必须含 `index.js` + `package.json`(声明 `wx-server-sdk:latest`) + `config.json`({timeout,memorySize,installDependency:true})。**缺 package.json → DevTools 无法部署运行**（曾发生 confirmImaImport 只有 index.js、未部署，导致待确认区「确认/拒绝/一键全部导入」三按钮全无反应）。
-2. **明确提醒部署**：每新增一个被前端调用的云函数，都要主动告诉用户去 DevTools 右键该函数 → 「上传并部署：云端安装依赖」。不能只部署部分函数——凡是前端 callFunction 用到的函数都得部署，否则表现为"按钮无反应/调用失败"。
-3. **ima key 类函数额外项**（syncIma）：云函数环境变量配 `IMA_CLIENT_ID`/`IMA_API_KEY`（取自 `~/.config/ima/`，绝不进前端/不落代码库）；且 DevTools 重部署**不回写 timeout**，配完须去云控制台确认超时已生效（transferImaImages 曾因默认 3s 触发 433）。
-4. **写操作走管理员上下文**：客户端直接写 knowledge_articles 会被安全规则 `doc._openid==auth.openid` 拦掉（云函数导入的文章无 `_openid`，静默失败/误判成功）。凡是确认导入/删除/状态翻转等写操作，统一走云函数（confirmImaImport / deleteArticle 模式），前端只 `wx.cloud.callFunction`。
-5. **语法校验**：改动后跑 `node --check`（注意：对象简写属性 `{foo,}` 引用的是变量 `foo`，与 `fooKey` 不是一回事——这类 ReferenceError 运行时才炸，`node --check` 查不出，关键路径本地复现运行）。
+## 云函数部署清单（新增/改动被 callFunction 调用的函数时逐条核对）
+1. 目录三件套：index.js + package.json(wx-server-sdk:latest) + config.json(timeout,memorySize,installDependency:true)。
+2. 主动提醒用户去 DevTools 右键「上传并部署：云端安装依赖」；凡前端用到的函数都得部署。
+3. ima key 函数：配 IMA_CLIENT_ID/IMA_API_KEY（取自 ~/.config/ima/，不进代码库）；重部署不回写 timeout，须去控制台确认。
+4. 写操作走管理员上下文（云函数导入文章无 _openid 会被规则拦），前端只 callFunction。
+5. 改动后跑 `node --check`；对象简写 `{foo,}` 引用的是变量 foo，node --check 查不出，关键路径本地复现运行。
 
-## 前端通病/坑
-- **底部弹窗按钮被裁切 / 键盘遮挡（bottomsheet clipping）**：自定义底部弹窗统一用 `.mask`+`.sheet`（见 app.wxss）。坑与正解：
-  ① 遮罩 `.mask` 不能写 `inset:0`（部分基础库不识别）→ 显式 `top/left/right/bottom:0`，并用 `display:flex;flex-direction:column;justify-content:flex-end` 钉底。
-  ② 长内容弹窗（如成员管理：标题+码+成员列表+退出/删除按钮）必须用「flex column + 可滚主体」结构：`.sheet` 设 `display:flex;flex-direction:column;max-height:86vh`；标题 `.sheet-head`(flex-shrink:0) + 中间可滚区 `.sheet-body`(flex:1;**min-height:0**;overflow-y:auto) + 底部 `.sheet-foot`(flex-shrink:0)。**关键 `min-height:0`**：不设时 flex 子项不会收缩到内容高度以下，会被长列表撑高把 foot 顶出可视区，按钮被裁切。可滚区用普通 `<view class="sheet-body">` 即可（**别用 `<scroll-view>`**：flex 内 scroll-view 默认不定高同样会溢出把 foot 顶出去）；`position:sticky` 在微信 WebView 不可靠，勿用。
-  ③ 键盘遮挡：邀请码类带输入框弹窗，输入框设 `adjust-position="{{false}}"`，页面 `onShow` 注册 `wx.onKeyboardHeightChange` 把高度写入 `kbHeight` data、`onHide` 注销；`.sheet` 加 `style="margin-bottom:{{kbHeight}}px"` 整体抬到键盘上方。短弹窗（标题+输入+两按钮）无滚动，靠①即可，但仍建议统一加 `kbHeight` 防键盘遮挡。
-  ④ **自定义 tabBar 会盖住页面 fixed 弹窗**（tabBar 框架包装层层级 > 普通弹窗，截图表现为底部按钮被 tabBar 压掉一半）：双保险修复 = `.mask` z-index 提到 99999（官方社区结论须 >9999）+ 弹窗打开期间 `this.getTabBar().setData({hidden:true})` 整条隐藏 tabBar（custom-tab-bar 加 `hidden` data + wxml `wx:if`），关闭/成功/`onHide` 时恢复 false。页面用 `setBarHidden(hidden)` 助手封装。
-  ⑤ **弹窗内 input 自动聚焦禁止绑常驻布尔**（如 `focus="{{showJoin}}"`）：focus 常驻 true 时，键盘被 kbHeight 重排等打断后微信认为「仍聚焦」，再点输入框不拉键盘不收键。正解：一次性 `joinFocus` 开关——goJoin 里先 false、`setTimeout 300ms` 后置 true；input 加 `bindblur` 失焦即复位；cancel/confirm/校验失败路径全部复位并 clearTimeout。
-  ⑥ **数字输入「敲了不回显」终极解法 = 6 格验证码样式（透明 input + data 驱动格子）**：`type="number"` 在部分机型有敲键不回显的顽疾（邀请码两次中招）。邀请码弹窗已改为：6 个 `.code-cell` 格子由 `codeCells` data 渲染，透明 `.code-input`（opacity:0 绝对定位盖在格子上，type="digit"）只负责聚焦收键盘；`_applyCode(v)` 统一回填（去非数字、截 6 位、算格子）。显示不依赖原生回显，敲没敲进来看格子即知。首页/我的页均此实现，`.join-input` 样式已删。
-  ⑦ **canvas 2d 所在的块不要用 wx:if 反复卸载，用 hidden 显隐**：退出项目 → 首页 `wx:elif` 整块卸载（含饼图 canvas 2d）→ 部分机型 WebView 布局损坏（内容挤压、自定义 tabBar 悬空在 3/4 屏处、下方漏页面底色），重启小程序才恢复（2026-10-09 实测）。正解：首页改 `<view class="home-main" hidden="{{!project}}">` 常驻显隐；drawPie 等画布逻辑加零尺寸守卫（hidden 时 fields size=0 直接 return）。同层渲染不可用的老设备上，任何「创建/销毁原生组件节点」的动态操作都可能损坏布局。
-- **wx.showLoading 与 wx.showToast 共用同一原生单例视图**：失败分支「先 showToast 再 finally hideLoading」会把刚弹出的错误提示瞬间关掉，表现为「操作失败但没有任何提示」（2026-10-09 邀请码输错无提示的根因）。正解：先 `wx.hideLoading()` 再 `wx.showToast`——把 callFunction 包在 try/catch/finally 里只取 result，hideLoading 放 finally，toast 判断放到 hideLoading 之后。confirmJoin/regenCode/removeMember/exit/delete 全部按此模式改。
-- **金额「元↔分」往返陷阱（fen2yuan / yuan2fen）**：`utils/format.js` 的 `fen2yuan` 对 ≥1000 元会插入千分位逗号（如 "1,234.00"），而 `yuan2fen` 必须先把逗号去掉再 `Number()` 解析（`String(yuan).replace(/,/g,'')`），否则 `Number("1,234.00")` 为 NaN→0。后果：编辑已存金额 ≥1000 的花费/材料时，`onSave` 的 `if(fen<=0)` 守卫会误判「金额为 0」拦截保存（用户反馈「点明细能编辑但不能保存」的根因）。一次性改 `yuan2fen` 即可同时修好 budget/edit.js 与 material/edit.js。录入框统一用 `type="digit"`（非 number，避免受控不回显）。
-- **textarea 默认 maxlength=140（2026-10-09 AI 周报草稿截断根因）**：不写 maxlength 的 textarea/input 只显示/录入前 140 字，而 data 里是全量 →「编辑框显示不全、保存后详情页又能看全」的假象。凡是长文本 textarea 必须显式 `maxlength="{{-1}}"` + `auto-height`；diary/edit、knowledge/import 已修。
-- **小程序端 callFunction 约 15s 客户端超时（errCode -1）**：LLM 类云函数若等大模型超过它就被掐断报 -1。正解（2026-10-09 askAI/weeklyDigest 双修）：① LLM 请求加 max_tokens 限长（问答 600 / 周报 300）提速；② 函数内 http 截止收紧 13s，超时走降级（相关文章列表/统计模板）而非让调用死掉；③ 云控制台逐一确认函数超时 60s（DevTools 部署不保证 timeout 生效）。报错文案取 e.errMsg 优先（errCode -1 看不出原因）。
-- **云函数内服务端 SDK 主键是 `_id` 不是 `id`**：适配层 eq('id')→_id 只在前端生效；云函数里 `a.id` 是 undefined（2026-10-09 askAI sources 全空 → 详情页「文章不存在」）。云函数里组装要传回前端的 id 一律用 `a._id || a.id`。
-- **成员校验写（2026-10-09 收口，防越权写入）**：`diaries`/`expenses`/`materials` 三张内容表的增删改**必须走云函数 `dataWrite`**（客户端经 `utils/write.js` 的 `write.insert/update/remove` 调用），三张表安全规则已收 `write:false`，客户端 `cloud.database.from(...).insert/update/remove` 直写会被拒。新增/改动这三个集合的写路径时，禁止再用适配层直写，一律走 `write.*`。`dataWrite` 在落库前查 `members` 校验 active 成员，owner 也在 members 里不会被误伤；insert 会强制覆盖 `project_id` 防越权写别的项目；update 支持可选乐观锁 `version`（与编辑页原有 version 逻辑一致，老数据无 version 则按 `_id` 直接更新）。**部署顺序：先部署 `dataWrite` 并验证，再把三张表规则改成 false**——顺序反了会全员写不进。
+## 前端通病/坑（ terse ）
+- 底部弹窗用 `.mask`+`.sheet`：`.mask` 显式 top/left/right/bottom:0 + flex column end 钉底；长弹窗 `.sheet` flex column + `.sheet-body` flex:1 min-height:0 overflow-y:auto + head/foot flex-shrink:0（缺 min-height:0 会把 foot 顶出裁切）；别用 scroll-view/position:sticky。
+- 键盘遮挡：弹窗输入框 adjust-position=false，onShow 注册 onKeyboardHeightChange 写 kbHeight，onHide 注销，.sheet margin-bottom:kbHeight。
+- 自定义 tabBar 盖住 fixed 弹窗：.mask z-index 99999 + 弹窗期 `getTabBar().setData({hidden:true})`；封装 `setBarHidden`。
+- 数字 input 不回显：邀请码改 6 格验证码样式（透明 input + data 驱动格子）。
+- canvas 2d 块用 hidden 显隐（勿 wx:if 反复卸载，会损 WebView 布局）。
+- wx.showLoading/showToast 同单例：先 hideLoading 再 showToast（放 try/finally）。
+- 金额元↔分：`fen2yuan` ≥1000 插千分位逗号，`yuan2fen` 须先 `replace(/,/g,'')` 再 Number，否则 NaN→0 误判金额 0 拦截保存。
+- textarea 默认 maxlength=140：长文本须 `maxlength="{{-1}}"` + auto-height。
+- callFunction 约 15s 客户端超时(-1)：LLM 请求 max_tokens 限长 + 函数内 http 13s 截止 + 控制台确认函数超时 60s。
+- 云函数内主键是 `_id` 不是 `id`（组装回传 id 用 `a._id || a.id`）。
+- 时间显示统一 `utils/time.js.formatLocal`（DB 存 UTC 串，强制 +8h；勿用 toLocaleString，HarmonyOS 不准）；云函数内联同款。
+- `app_feedback` 集合 `.order()` 报 not a function：改拉全表 + JS sort；新集合第一时间建 created_at 索引。
+
+## AI 管家（pages/ai/assistant.js）录入字段映射（2026-10-15 关键）
+- 录入走启发式解析（材料/花费/日记）+ LLM 兜底（`aiAssistant` mode:'extract'）。`send()` 用 try/catch+`finish()` 复位 loading，严禁裸调 Page 方法（须 `this.`）。
+- **字段必须对齐集合读取端**，否则数据写进去了但页面读不到（用户实测「数据未对应到相应字段」）：
+  - 材料：`remark`（非 `note`！）、`unit_price/total_price/planned_price`（分）、`belong/sub/stage_ids/stage_id/attachments/created_at/updated_at` 都要补。
+  - 花费：`amount`(分)、`type`、`pay_date`、`stage_ids`+`stage_id`、`belong`、`remark`、`created_at`+`updated_at`、`deleted:false`。
+  - 日记：`title/content/diary_date/room_ids`+`room_id`/`stage_ids`+`stage_id`/`created_at`+`updated_at`/`deleted:false`。
+  - `dataWrite` 透传 `event.data`，字段名完全由前端负责；落库后用「我的/日记/花费/材料」页确认识别。
+- 中文 NP 解析要点：head 不强制 `\s+`；总价 bMatch 先于裸 priceReC；name 清理先剥 bMatch 再 aMatch；alternation 长选项放最左；unitRe 用 alternation 非字符类。
