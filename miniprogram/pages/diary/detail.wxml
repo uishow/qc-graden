@@ -6,6 +6,11 @@
 
   <view class="card" wx:if="{{diary.content}}" style="white-space:pre-wrap">{{diary.content}}</view>
 
+  <!-- 附件失效提示：库里有 fileID 但云存储取不到时明确告知 + 给动作，不再静默空白 -->
+  <view wx:if="{{attachTip}}" class="card" style="border-left:6rpx solid #C0492F">
+    <text style="color:#C0492F;font-size:26rpx">⚠️ {{attachTip}}</text>
+  </view>
+
   <view style="display:flex;flex-wrap:wrap;gap:12rpx" wx:if="{{imageUrls.length}}">
     <image wx:for="{{imageUrls}}" wx:key="*this" src="{{item}}" mode="aspectFill"
       style="width:220rpx;height:220rpx;border-radius:12rpx"

@@ -30,9 +30,18 @@ Page({
       return
     }
     let imageUrls = []
+    let attachTip = ''
     if (diary.image_paths && diary.image_paths.length) {
-      const { data: urls } = await cloud.storage.createSignedUrls(diary.image_paths, 600)
-      imageUrls = (urls || []).map((u) => u.signedUrl || u.signedURL || u.url || '')
+      const { data: urls, error: urlErr } = await cloud.storage.createSignedUrls(diary.image_paths, 600)
+      imageUrls = (urls || []).map((u) => u.signedUrl || u.signedURL || u.url || '').filter(Boolean)
+      // 「列表显示有附件、详情却一张都没有」= 库里有 fileID 但云存储取不到（上传时网络抖动留下坏引用、
+      // 或文件被删）。旧实现静默显示空白，用户只能猜；现在明确说清并给出动作。（2026-10-15 实测）
+      if (!imageUrls.length) {
+        const n = diary.image_paths.length
+        attachTip = `这篇日记记了 ${n} 个附件，但都打不开（${(urlErr && urlErr.message) || '文件不存在或无权限'}）。请在编辑页删除后重新上传。`
+      } else if (imageUrls.length < diary.image_paths.length) {
+        attachTip = `有 ${diary.image_paths.length - imageUrls.length} 个附件打不开，可重新上传。`
+      }
     }
     const ids = [...new Set([diary.owner_id, diary.last_editor_id].filter(Boolean))]
     let nameMap = {}
@@ -44,6 +53,7 @@ Page({
     this.setData({
       diary,
       imageUrls,
+      attachTip,
       authorName: nameMap[diary.owner_id] || '家庭成员',
       editorName: diary.last_editor_id && diary.last_editor_id !== diary.owner_id
         ? (nameMap[diary.last_editor_id] || '家庭成员') : '',

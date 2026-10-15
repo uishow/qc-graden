@@ -48,21 +48,48 @@ function choose(existingCount) {
   })
 }
 
-// 逐个上传到云存储 dir 目录（如 'expenses' / 'materials'），返回 {fileID, name, kind} 列表
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// 上传单个文件：校验 fileID 合法（必须 cloud:// 开头），不合法/抛错则静默重试一次。
+// ★ 背景（2026-10-15 实测）：网络抖动时 uploadFile **不一定抛异常**，
+//   它可能正常返回但 fileID 为空。旧实现直接 out.push(res.fileID) → 把 undefined 存进库，
+//   于是列表按长度显示「📷 有附件」，详情页和 AI 管家去取链接时却一张都打不开。
+async function uploadOne(cloudPath, filePath) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await wx.cloud.uploadFile({ cloudPath, filePath })
+      const id = res && res.fileID
+      if (id && String(id).indexOf('cloud://') === 0) return id
+    } catch (e) { /* 落到下面重试 */ }
+    if (attempt === 0) await sleep(600)
+  }
+  return ''
+}
+
+// 逐个上传到云存储 dir 目录（如 'expenses' / 'materials'），返回 {fileID, name, kind} 列表。
+// 失败的**不入库**（避免留下打不开的坏引用），并提示用户有几张没传上去。
 async function upload(items, dir) {
   const out = []
+  const failed = []
   for (const it of items || []) {
     const rand = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+    let fileID = ''
+    let name = ''
     if (it.kind === 'image') {
       const ext = (String(it.temp).match(/\.(\w+)$/) || [null, 'jpg'])[1]
-      const res = await wx.cloud.uploadFile({ cloudPath: `${dir}/${rand}.${ext}`, filePath: it.temp })
-      out.push({ fileID: res.fileID, name: it.name || '图片', kind: 'image' })
+      name = it.name || '图片'
+      fileID = await uploadOne(`${dir}/${rand}.${ext}`, it.temp)
+      if (fileID) out.push({ fileID, name, kind: 'image' })
     } else {
       // 文件保留原始文件名（含扩展名，openDocument 识别类型用）；过滤非法字符
-      const safe = String(it.name || '文件').replace(/[\\/:*?"<>|]/g, '_')
-      const res = await wx.cloud.uploadFile({ cloudPath: `${dir}/${rand}-${safe}`, filePath: it.temp })
-      out.push({ fileID: res.fileID, name: safe, kind: 'file' })
+      name = String(it.name || '文件').replace(/[\\/:*?"<>|]/g, '_')
+      fileID = await uploadOne(`${dir}/${rand}-${name}`, it.temp)
+      if (fileID) out.push({ fileID, name, kind: 'file' })
     }
+    if (!fileID) failed.push(name)
+  }
+  if (failed.length) {
+    wx.showToast({ title: `${failed.length} 个附件上传失败，请重试`, icon: 'none' })
   }
   return out
 }

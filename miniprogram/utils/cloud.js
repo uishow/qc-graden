@@ -200,15 +200,36 @@ const cloud = {
   },
   storage: {
     // 由 fileID 列表换临时访问 URL（替代原 createSignedUrls）；失败返回空而非抛出
+    // 注意：getTempFileURL 是**逐文件**返回状态的——文件不存在 / 无权限 / 不属于本环境时，
+    // 该条 status !== 0 且 tempFileURL 为空，但整体调用**不报错**。
+    // 旧实现直接 map 出 { signedUrl: undefined }，调用方一过滤就变"静默无图"：
+    // 列表角标按 image_paths.length 显示"有附件"，详情页和 AI 管家却一张都出不来（2026-10-15 实测）。
+    // 现在逐条判定，并把真实原因带回给调用方，让"打不开"变成可诊断的错误而不是空白。
     async createSignedUrls(paths) {
-      if (!paths || !paths.length) return { data: [], error: null }
+      const list = (paths || []).filter(Boolean)
+      if (!list.length) return { data: [], error: null }
       try {
-        const res = await wx.cloud.getTempFileURL({ fileList: paths })
-        const data = (res.fileList || []).map((f) => ({ signedUrl: f.tempFileURL }))
-        return { data, error: null }
+        const res = await wx.cloud.getTempFileURL({ fileList: list })
+        const items = res.fileList || []
+        const ok = []
+        const failed = []
+        items.forEach((f) => {
+          if (f && f.status === 0 && f.tempFileURL) ok.push({ signedUrl: f.tempFileURL, fileID: f.fileID })
+          else failed.push(f || {})
+        })
+        const error = failed.length
+          ? {
+            code: 'storage_failed',
+            message: (failed[0] && (failed[0].errMsg || failed[0].message)) || '文件不存在或无权限',
+            okCount: ok.length,
+            failedCount: failed.length,
+          }
+          : null
+        if (failed.length) console.error('[cloud] getTempFileURL partial failed', { ok: ok.length, failed: failed.length, sample: failed[0] })
+        return { data: ok, error }
       } catch (e) {
         console.error('[cloud] getTempFileURL failed', paths, e)
-        return { data: [], error: { code: 'storage_failed', message: (e && e.message) || '图片链接获取失败' } }
+        return { data: [], error: { code: 'storage_failed', message: (e && e.message) || '图片链接获取失败', okCount: 0, failedCount: list.length } }
       }
     },
   },

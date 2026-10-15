@@ -166,19 +166,35 @@ Page({
     this.setData({ localImages: list })
   },
 
+  // 返回 { uploaded, failed }。
+  // ★ 修「列表显示有附件、详情却打不开」（2026-10-15 实测）：
+  //   旧实现 uploaded.push(res.fileID) 不校验、不重试——网络抖动时 uploadFile 可能
+  //   正常返回但 fileID 为空，undefined 被写进 image_paths，于是列表按长度显示"📷 有附件"，
+  //   取链接时却一张都出不来。现在：失败的**不入库**，并静默重试一次。
   async uploadImages() {
     const uploaded = []
+    const failed = []
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
     for (const path of this.data.localImages) {
-      if (path.startsWith('cloud://')) {
+      if (String(path).indexOf('cloud://') === 0) {
         uploaded.push(path)
         continue
       }
-      const ext = (path.match(/\.(\w+)$/) || [null, 'jpg'])[1]
+      const ext = (String(path).match(/\.(\w+)$/) || [null, 'jpg'])[1]
       const cloudPath = `diary/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`
-      const res = await wx.cloud.uploadFile({ cloudPath, filePath: path })
-      uploaded.push(res.fileID)
+      let fileID = ''
+      for (let attempt = 0; attempt < 2 && !fileID; attempt++) {
+        try {
+          const res = await wx.cloud.uploadFile({ cloudPath, filePath: path })
+          const id = res && res.fileID
+          if (id && String(id).indexOf('cloud://') === 0) fileID = id
+        } catch (e) { /* 落到下面重试 */ }
+        if (!fileID && attempt === 0) await sleep(600)
+      }
+      if (fileID) uploaded.push(fileID)
+      else failed.push(path)
     }
-    return uploaded
+    return { uploaded, failed }
   },
 
   async onSave() {
@@ -198,7 +214,16 @@ Page({
       const { user } = await cloud.auth.getSession()
       if (!user) throw new Error('未登录')
       const uid = user.id
-      const imagePaths = await this.uploadImages()
+      const up = await this.uploadImages()
+      const imagePaths = up.uploaded
+      // 上传失败的附件不入库，但要让用户知道（否则"我明明选了 3 张，怎么只剩 2 张"）
+      if (up.failed.length) {
+        wx.showToast({
+          title: `${up.failed.length} 张图片上传失败（网络不稳定），其余已保存`,
+          icon: 'none',
+          duration: 3000,
+        })
+      }
       const now = new Date().toISOString()
       const payload = {
         title: title.trim(),
