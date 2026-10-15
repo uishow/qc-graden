@@ -8,12 +8,27 @@ const app = getApp()
 
 const DIM_KEYS = ['usability', 'aesthetics', 'functionality']
 
-// ISO 时间戳 → YYYY-MM-DD HH:mm；空值兜底 '—'
+// ISO 时间戳（UTC）→ 中国本地时间 `YYYY-MM-DD HH:mm`
+// 历史：曾用 `s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)` 直接截前 13 位，
+//   但数据库存的 created_at 是 `new Date().toISOString()` 的 UTC 串，
+//   直接截得到的是 UTC 时间（如 02:58），用户在中国看到本地时间应是 10:58（+8h），
+//   差 8 小时会让用户怀疑「时间不对」。修法：手动 +8 小时再格式化。
+//   不依赖 toLocaleString 是因为部分平台（如 HarmonyOS 微信）的默认时区可能不准确，
+//   项目方所在地就是北京，统一 UTC+8 最稳。
+const TZ_OFFSET_MS = 8 * 3600 * 1000
 function formatTime(iso) {
   const s = String(iso || '').trim()
   if (!s) return '—'
-  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)
-  return m ? m[1] + ' ' + m[2] : s.slice(0, 16)
+  const d = new Date(s)
+  if (isNaN(d.getTime())) {
+    // 解析失败兜底：保留原来的「前 13 位」逻辑
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)
+    return m ? m[1] + ' ' + m[2] : s.slice(0, 16)
+  }
+  const t = new Date(d.getTime() + TZ_OFFSET_MS)
+  const pad = (n) => (n < 10 ? '0' + n : '' + n)
+  return t.getUTCFullYear() + '-' + pad(t.getUTCMonth() + 1) + '-' + pad(t.getUTCDate())
+    + ' ' + pad(t.getUTCHours()) + ':' + pad(t.getUTCMinutes())
 }
 
 // 本地缓存 key：云函数 feedbackList 不可用（未部署 / 调用失败）时，
