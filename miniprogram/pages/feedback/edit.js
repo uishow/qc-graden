@@ -16,6 +16,23 @@ function formatTime(iso) {
   return m ? m[1] + ' ' + m[2] : s.slice(0, 16)
 }
 
+// 本地缓存 key：云函数 feedbackList 不可用（未部署 / 调用失败）时，
+// 用本地图把刚提交的内容兜底出来给用户看；不会和云端数据冲突（只兜底用）
+const LOCAL_KEY = 'localFeedbackList'
+function readLocalFeedback() {
+  try {
+    const arr = wx.getStorageSync(LOCAL_KEY)
+    return Array.isArray(arr) ? arr : []
+  } catch (e) { return [] }
+}
+function appendLocalFeedback(item) {
+  try {
+    const arr = readLocalFeedback()
+    arr.unshift(item)
+    wx.setStorageSync(LOCAL_KEY, arr.slice(0, 200))
+  } catch (e) { /* 写失败也不影响主流程 */ }
+}
+
 Page({
   data: {
     theme: 'theme-a',
@@ -86,6 +103,9 @@ Page({
   // 拉取历史反馈（按当前 historyScope：self/all）
   // 服务端在管理员申请 all 但实际不是管理员时会强制回落到 self，
   // 这里同步对齐 UI，避免「选了全员但只列自己的数据」出现
+  // 兜底：若云函数没部署 / 调用失败（feedbackList 不存在是 2026-10-15 用户遇到的实坑），
+  //      用本地缓存展示自己提交过的内容，至少用户能看到自己刚写的；
+  //      服务端成功时仍以云端为主源（本地仅作为「数据存在但读不到」时的兜底）。
   async loadHistory() {
     if (this.data.historyLoading) return
     this.setData({ historyLoading: true })
@@ -97,10 +117,23 @@ Page({
       })
       result = (r && r.result) || null
     } catch (e) {
-      result = { ok: false, message: '网络异常，请重试' }
+      // 云函数不存在 / 超时 / 鉴权失败等 → result.ok=false
+      result = { ok: false, message: '加载失败（云函数未就绪）' }
     }
     this.setData({ historyLoading: false })
     if (!result || !result.ok) {
+      // ★ 本地兜底：只对 self 视图兜底（全员视图本地只可能有自己的）
+      const isAll = this.data.historyScope === 'all'
+      const local = isAll ? [] : readLocalFeedback()
+      if (local.length) {
+        const list = local.map((it) => ({ ...it, timeText: formatTime(it.submittedAt), fromLocal: true }))
+        this.setData({
+          historyList: list,
+          historyEmptyText: '',
+          isManager: false,
+        })
+        return
+      }
       this.setData({
         historyList: [],
         historyEmptyText: (result && result.message) || '加载失败',
@@ -162,6 +195,15 @@ Page({
     // 写「上次反馈时间」到本地缓存：让「我的」页下方展示一行小字
     const nowISO = new Date().toISOString()
     try { wx.setStorageSync('lastFeedbackAt', nowISO) } catch (e) { /* 写失败不影响主流程 */ }
+    // ★ 本地兜底缓存：把刚提交的快照保存到本地，万一云端 feedbackList 没部署/失败，
+    //   loadHistory() 会自动从这里兜底出来给用户看自己刚写的内容
+    appendLocalFeedback({
+      id: 'local-' + nowISO,
+      submittedAt: nowISO,
+      scores: { usability: s.usability, aesthetics: s.aesthetics, functionality: s.functionality },
+      comment: text,
+      system: payload.system,
+    })
     this.setData({
       done: true,
       doneSnapshot: {
