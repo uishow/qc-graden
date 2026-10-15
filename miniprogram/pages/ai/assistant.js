@@ -1340,6 +1340,34 @@ Page({
     }, 900) // 留 0.9s 让用户看到 ✅ 回执再跳
   },
 
+  // 从 AI 回答里抓出「示例指令」做成可点 chips。
+  // 场景：LLM 常自由发挥引导（「你可以试试说：显示《X》的附件」），用户照着文字重打，
+  // 措辞稍变就命中不了解析 → 表现就是「顺着引导说却出不来结果」（2026-10-15 实测）。
+  // 规则：引号里像指令的（含显示/录入/把…改为 等动词）原样成按钮；
+  //       《》里的是已知日记标题时补成「显示《标题》的附件」；最多 3 条。
+  _suggestFromReply(reply) {
+    const t = String(reply || '')
+    const out = []
+    const push = (s) => {
+      s = String(s || '').trim()
+      if (s.length < 4 || s.length > 40) return
+      if (out.indexOf(s) === -1 && out.length < 3) out.push(s)
+    }
+    const cmdRe = /(显示|查看|打开|调出|翻出|录入|添加|登记|记一笔|记录|把|将|改为|改成|设为|标记为|修改)/;
+    const diaryTitles = (this.data.raw && this.data.raw.diaries || []).map((d) => String(d.title || ''))
+    const re = /[「『“"]([^」』”"]{2,40})[」』”"]|《([^》]{2,40})》/g
+    let m
+    while ((m = re.exec(t)) && out.length < 3) {
+      const raw = String(m[1] || m[2] || '').trim()
+      if (!raw) continue
+      if (cmdRe.test(raw)) { push(raw); continue }
+      // 《标题》形态：只有确实是项目里的日记标题才补成调图指令，避免生成乱七八糟的按钮
+      const isDiary = diaryTitles.some((n) => n && (n === raw || n.indexOf(raw) !== -1 || raw.indexOf(n) !== -1))
+      if (isDiary) push('显示《' + raw + '》的附件')
+    }
+    return out
+  },
+
   // 弹窗/半屏表单打开期间隐藏自定义 tabBar（其层级高于页面 fixed 弹窗，会盖住底部按钮）
   setBarHidden(hidden) {
     const bar = this.getTabBar && this.getTabBar()
@@ -1440,7 +1468,8 @@ Page({
             : '（AI 返回为空，已用项目现状兜底）'
         extra = '\n\n' + tip
       }
-      finish(answer + extra)
+      // AI 自由发挥的引导（"你可以试试说…"）用户照着重打常对不上 → 抓出示例指令做成可点 chips
+      finish(answer + extra, null, this._suggestFromReply(answer))
     } catch (e) {
       // 任何未预期异常都复位 loading，绝不卡死
       finish('抱歉，处理出错了：' + (e && e.message ? e.message : '未知错误'))

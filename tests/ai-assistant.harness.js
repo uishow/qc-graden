@@ -64,6 +64,7 @@ global.wx = {
       const d = (arg && arg.data) || {}
       // mode:'parse' 用可注入的 mock，便于验证 LLM 理解优先链路
       if (d.mode === 'parse' && global.__parseMock !== undefined) return { result: global.__parseMock }
+      if (d.question && global.__qaAnswer !== undefined) return { result: { ok: true, answer: global.__qaAnswer, ai: true } }
       return { result: { ok: true, answer: 'x' } }
     },
   },
@@ -84,7 +85,7 @@ ctx.data = {
   },
   raw: {
     expenses: [{ amount: 500000, type: 'labor', pay_date: '2026-10-15', stage_ids: ['s1'] }],
-    materials: [], diaries: [],
+    materials: [], diaries: [{ title: '土建进场日记 999' }, { title: '水电验收' }],
     stages: [
       { id: 's0', name: '准备阶段', status: 'pending' },
       { id: 's1', name: '水电改造', status: 'doing' },
@@ -367,4 +368,25 @@ async function round2() {
   check('send 走 LLM 结果生成花费预览卡', ctx.data.pending && ctx.data.pending.kind === 'expense' && ctx.data.pending.parsed.amount === 20000, JSON.stringify(ctx.data.pending && ctx.data.pending.kind))
   check('预览后 loading 已复位', ctx.data.loading === false)
   global.__parseMock = undefined
+
+  console.log('\n=== R. AI 回答里的引导 → 可点 chips ===')
+  check('抓出带动词的示例指令', (() => {
+    const r = ctx._suggestFromReply('你可以试试说：「显示《土建进场日记 999》的附件」')
+    return r.length === 1 && r[0] === '显示《土建进场日记 999》的附件'
+  })(), JSON.stringify(ctx._suggestFromReply('你可以试试说：「显示《土建进场日记 999》的附件」')))
+  check('《已知日记标题》补成调图指令', (() => {
+    const r = ctx._suggestFromReply('直接说《水电验收》就行')
+    return r.length === 1 && r[0] === '显示《水电验收》的附件'
+  })(), JSON.stringify(ctx._suggestFromReply('直接说《水电验收》就行')))
+  check('非日记的引号词不生成按钮', ctx._suggestFromReply('通用建议：先看「通用建议」这一条').length === 0, JSON.stringify(ctx._suggestFromReply('通用建议：先看「通用建议」这一条')))
+  check('无引号回答不生成按钮', ctx._suggestFromReply('目前装修到水电阶段').length === 0)
+  check('最多 3 条', ctx._suggestFromReply('可说「录入材料 瓷砖」「录入花费 200」「记一篇日记」「把准备阶段改为进行中」').length === 3)
+  // 端到端：问答回复带 chips
+  ctx.data.messages = []
+  global.__qaAnswer = '我这边看不到附件本体，你可以说「显示《土建进场日记 999》的附件」把图调出来。'
+  await ctx.send('装修下一步该做什么') // 不用含「日记/图片」的句子，否则会先命中日记查图路径
+  const lastMsg = ctx.data.messages[ctx.data.messages.length - 1]
+  check('问答回复带可点 chips', !!(lastMsg && lastMsg.suggestions && lastMsg.suggestions.length === 1 && lastMsg.suggestions[0] === '显示《土建进场日记 999》的附件'), JSON.stringify(lastMsg && lastMsg.suggestions))
+  check('问答后 loading 复位', ctx.data.loading === false)
+  global.__qaAnswer = undefined
 }
