@@ -1212,6 +1212,9 @@ Page({
     const t = String(text || '')
     const list = diaries || []
     if (!list.length) return null
+    // 数字串强信号：用户常用编号点名日记（如「看一下999楼项目日记的附件」）。
+    // 2-gram 会把「999」稀释成「99」，叠上「日记」被 df 过滤后 score=1<2 选不中（2026-10-15 实测漏）
+    const nums = t.match(/\d{2,}/g) || []
     const sets = list.map((d) => {
       const src = String(d.title || '') + String(d.content || '')
       const s = new Set()
@@ -1225,12 +1228,15 @@ Page({
     sets.forEach((s, i) => {
       let score = 0
       s.forEach((g) => { if (t.indexOf(g) !== -1 && df[g] <= dfMax) score++ })
+      const src = String(list[i].title || '') + String(list[i].content || '')
+      nums.forEach((n) => { if (src.indexOf(n) !== -1) score += 3 })
       if (score > bestScore) { bestScore = score; best = list[i] }
     })
     return bestScore >= 2 ? best : null
   },
 
-  // 返回 { text, images? }；找不到相关日记返回 null（落到 LLM 问答）
+  // 返回 { text, images? }。选篇失败时返回引导文案（列最近日记+附件数），
+  // 不再返回 null 落 LLM 问答——AI 看不到附件本体，只会编「调不出来」（2026-10-15 实测）
   async _handleDiaryLookup(text) {
     const projectId = store.getCurrentProjectId()
     if (!projectId) return null
@@ -1241,9 +1247,19 @@ Page({
         .eq('project_id', projectId)
         .neq('deleted', true)
         .limit(100)
-      if (error || !(data || []).length) return null
-      const hit = this._pickDiaryByText(text, data)
-      if (!hit) return null
+      if (error) return null
+      const list = data || []
+      if (!list.length) return { text: '当前项目还没有日记，先去「日记」页记一篇吧。' }
+      const hit = this._pickDiaryByText(text, list)
+      if (!hit) {
+        const lines = list.slice(0, 5).map((d, i) => {
+          const n = (d.image_paths || []).length
+          return (i + 1) + '. 《' + (d.title || '无标题') + '》' + (d.diary_date || '') + (n ? '（📷' + n + '图）' : '')
+        })
+        return {
+          text: '没找到你说的是哪篇日记，可以点名说「显示《日记标题》的附件」。\n最近的日记：\n' + lines.join('\n'),
+        }
+      }
       const fileIds = hit.image_paths || []
       if (!fileIds.length) {
         return { text: '📖 找到日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '），但这篇日记没有附件图片。' }
