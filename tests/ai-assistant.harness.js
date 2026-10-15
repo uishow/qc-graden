@@ -45,6 +45,14 @@ const stubWrite = {
   update: async (col, pid, id, data) => { lastUpdate = { col, pid, id, data }; return { data: [{ id }], error: null } },
   remove: async () => ({ data: [], error: null }),
 }
+// 反馈闭环：捕获所有埋点信号（真实实现是「失败静默」，这里要能看到有没有记全）
+const feedbackLogs = []
+const stubAiFeedback = {
+  log: (signal, p) => { feedbackLogs.push(Object.assign({ signal }, p || {})); return true },
+  list: async () => ({ data: { groups: [], total: 0 }, error: null }),
+  setStatus: async () => ({ data: true, error: null }),
+  summary: async () => ({ data: { pendingGroups: 0, pendingRows: 0 }, error: null }),
+}
 
 const origLoad = Module._load
 Module._load = function (request, parent, isMain) {
@@ -53,6 +61,7 @@ Module._load = function (request, parent, isMain) {
   if (request.endsWith('utils/access')) return stubAccess
   if (request.endsWith('utils/arrayId')) return stubArrayId
   if (request.endsWith('utils/write')) return stubWrite
+  if (request.endsWith('utils/aiFeedback')) return stubAiFeedback
   return origLoad.apply(this, arguments)
 }
 
@@ -396,4 +405,102 @@ async function round2() {
   check('问答回复带可点 chips', !!(lastMsg && lastMsg.suggestions && lastMsg.suggestions.length === 1 && lastMsg.suggestions[0] === '显示《土建进场日记 999》的附件'), JSON.stringify(lastMsg && lastMsg.suggestions))
   check('问答后 loading 复位', ctx.data.loading === false)
   global.__qaAnswer = undefined
+
+  console.log('\n=== S. 反馈闭环埋点（自动采集「AI 没帮上忙」的信号） ===')
+  // S1 字段差异检测：edit_diff 是最高价值信号（带标准答案）
+  check('diff：改了名称 → [name]', (() => {
+    const d = ctx._diffParsed('material', { name: '木门', brand: '', quantity: 3, unit: '张', unit_price: 30000, note: '' },
+      { name: '实木门', brand: '', quantity: 3, unit: '张', unit_price: 30000, note: '', original: '' })
+    return d.length === 1 && d[0] === 'name'
+  })(), JSON.stringify(ctx._diffParsed('material', { name: '木门' }, { name: '实木门' })))
+  check('diff：完全一致 → []', ctx._diffParsed('expense',
+    { amount: 50000, type: 'labor', pay_date: '2026-10-15', remark: '工钱', stage_ids: ['s1'] },
+    { amount: 50000, type: 'labor', pay_date: '2026-10-15', remark: '工钱', stage_ids: ['s1'], original: '' }).length === 0)
+  check('diff：stage_ids 顺序不同不算改动', ctx._diffParsed('expense', { stage_ids: ['s1', 's0'] }, { stage_ids: ['s0', 's1'] }).length === 0)
+  check('diff：金额改了 → [amount]', JSON.stringify(ctx._diffParsed('expense', { amount: 50000 }, { amount: 80000 })) === '["amount"]')
+
+  // S2 表单改字段后落库 → 自动记 edit_diff（含「AI 理解 vs 用户改后」）
+  feedbackLogs.length = 0
+  ctx.data.formKind = 'material'
+  ctx.data.form = { name: '实木门', brand: '', quantity: '3', unit: '张', unitPriceYuan: '300.00', note: '' }
+  ctx.data.pending = { kind: 'material', parsed: { name: '木门', brand: '', quantity: 3, unit: '张', unit_price: 30000, total_price: 90000, note: '' } }
+  await ctx.confirmFromForm()
+  const ed = feedbackLogs.filter((x) => x.signal === 'edit_diff')[0]
+  check('改字段 → 记 edit_diff', !!ed, JSON.stringify(feedbackLogs.map((x) => x.signal)))
+  check('edit_diff 带差异字段名 reason', ed && ed.reason === 'name', ed && ed.reason)
+  check('edit_diff 带 AI 原解析（understood）', ed && String(ed.understood).indexOf('木门') !== -1, ed && ed.understood)
+  check('edit_diff 带用户改后答案（fixed）', ed && String(ed.fixed).indexOf('实木门') !== -1, ed && ed.fixed)
+
+  // S3 取消录入 → cancel
+  feedbackLogs.length = 0
+  ctx.data.pending = { kind: 'expense', parsed: { amount: 100 } }
+  ctx.cancelEntry()
+  check('取消 → 记 cancel', feedbackLogs[0] && feedbackLogs[0].signal === 'cancel', JSON.stringify(feedbackLogs))
+  check('cancel 带意图 intent', feedbackLogs[0] && feedbackLogs[0].intent === 'expense')
+
+  // S4 👎 → thumb_down（且同一条不重复计数）
+  feedbackLogs.length = 0
+  ctx.data.messages = [{ role: 'ai', text: '答非所问' }]
+  ctx._lastUserText = '999楼项目日记的附件'
+  ctx.markBad({ currentTarget: { dataset: { idx: 0 } } })
+  check('👎 → 记 thumb_down', feedbackLogs[0] && feedbackLogs[0].signal === 'thumb_down')
+  check('👎 记录原文 + 回答', feedbackLogs[0] && feedbackLogs[0].question === '999楼项目日记的附件' && feedbackLogs[0].reply === '答非所问', JSON.stringify(feedbackLogs[0]))
+  check('👎 后气泡标记 voted', ctx.data.messages[0].voted === 'bad')
+  ctx.markBad({ currentTarget: { dataset: { idx: 0 } } })
+  check('同一条重复点 👎 不重复计数', feedbackLogs.length === 1, '条数=' + feedbackLogs.length)
+
+  // S5 重复提问 → retry
+  ctx.data.messages = [{ role: 'user', text: '本月花费多少' }]
+  check('同句重问 → retry', ctx._isRepeatAsk('本月花费多少？') === true)
+  check('高度相似重问 → retry', ctx._isRepeatAsk('本月花费是多少') === true)
+  check('不同问题不算重问', ctx._isRepeatAsk('水电什么时候进场') === false)
+  // 防误报：只有后半段相同的不同问题（「X 阶段花了多少」）不能算重问
+  ctx.data.messages = [{ role: 'user', text: '水电阶段花了多少' }]
+  check('同句式不同主体不算重问', ctx._isRepeatAsk('木工阶段花了多少') === false, String(ctx._isRepeatAsk('木工阶段花了多少')))
+
+  // S6 日记查不到 → no_result（命中不到那篇，只给引导列表）
+  feedbackLogs.length = 0
+  ctx.data.messages = []
+  const missHit = await ctx._handleDiaryLookup('请把那篇关于阳台封窗的日记附件调出来')
+  check('查不到那篇 → 返回 miss 引导', !!(missHit && missHit.miss === true && missHit.suggestions && missHit.suggestions.length), JSON.stringify(missHit && missHit.text.slice(0, 30)))
+  ctx.data.input = '请把那篇关于阳台封窗的日记附件调出来'
+  await ctx.send()
+  check('查询落空 → 记 no_result', feedbackLogs.some((x) => x.signal === 'no_result'), JSON.stringify(feedbackLogs.map((x) => x.signal)))
+
+  // S7 AI 降级（未配置/调用失败）→ degraded
+  feedbackLogs.length = 0
+  ctx.data.messages = []
+  const origCF = global.wx.cloud.callFunction
+  global.wx.cloud.callFunction = async () => ({ result: { ok: true, answer: '兜底回答', ai: false, reason: 'not_configured' } })
+  ctx.data.input = '装修下一步该做什么'
+  await ctx.send()
+  global.wx.cloud.callFunction = origCF
+  const dg = feedbackLogs.filter((x) => x.signal === 'degraded')[0]
+  check('AI 降级 → 记 degraded', !!dg, JSON.stringify(feedbackLogs.map((x) => x.signal)))
+  check('degraded 带降级原因', dg && dg.reason === 'not_configured', dg && dg.reason)
+  const lastAi = ctx.data.messages[ctx.data.messages.length - 1]
+  check('降级提示透传给用户', !!(lastAi && lastAi.text.indexOf('AI 未配置大模型') !== -1), lastAi && lastAi.text)
+
+  // S9 判定是录入但字段没抽出来 → unparsed（最高频的一类理解问题）
+  feedbackLogs.length = 0
+  ctx.data.messages = []
+  global.__parseMock = { ok: false, reason: 'not_configured' } // LLM 不可用 → 只能靠规则
+  ctx.data.input = '录入材料'
+  await ctx.send()
+  global.__parseMock = undefined
+  const up = feedbackLogs.filter((x) => x.signal === 'unparsed')[0]
+  check('录入但抽不出字段 → 记 unparsed', !!up, JSON.stringify(feedbackLogs.map((x) => x.signal)))
+  check('unparsed 带意图 + 原文', up && up.intent === 'material' && up.question === '录入材料', JSON.stringify(up))
+
+  // S8 埋点失败绝不影响主流程（log 抛错也要能继续录入）
+  const origLog = stubAiFeedback.log
+  stubAiFeedback.log = () => { throw new Error('boom') }
+  ctx.data.messages = []
+  let threw = false
+  try {
+    ctx.data.pending = { kind: 'diary', parsed: { title: 't', content: 'c' } }
+    ctx.cancelEntry()
+  } catch (e) { threw = true }
+  stubAiFeedback.log = origLog
+  check('埋点抛错不影响主流程（取消仍能执行）', threw === false && ctx.data.pending === null)
 }
