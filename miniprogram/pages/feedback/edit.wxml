@@ -86,27 +86,21 @@
     </view>
 
     <view class="receipt">
-      <!-- 综合评分回执 -->
+      <!-- 综合评分回执：直接显示分数数字（不再用星点） -->
       <view wx:if="{{doneSnapshot.hasScores}}" class="receipt-row">
         <view class="receipt-title">综合评分</view>
         <view class="receipt-grid">
           <view class="receipt-dim">
             <text class="muted receipt-dim-name">易用性</text>
-            <view class="receipt-stars">
-              <text wx:for="{{5}}" wx:key="ru{{index}}" class="r-star {{doneSnapshot.scores.usability > index ? 'r-star-on' : ''}}">★</text>
-            </view>
+            <text class="muted receipt-dim-score">{{doneSnapshot.scores.usability || 0}} 分</text>
           </view>
           <view class="receipt-dim">
             <text class="muted receipt-dim-name">美观性</text>
-            <view class="receipt-stars">
-              <text wx:for="{{5}}" wx:key="ra{{index}}" class="r-star {{doneSnapshot.scores.aesthetics > index ? 'r-star-on' : ''}}">★</text>
-            </view>
+            <text class="muted receipt-dim-score">{{doneSnapshot.scores.aesthetics || 0}} 分</text>
           </view>
           <view class="receipt-dim">
             <text class="muted receipt-dim-name">功能性</text>
-            <view class="receipt-stars">
-              <text wx:for="{{5}}" wx:key="rf{{index}}" class="r-star {{doneSnapshot.scores.functionality > index ? 'r-star-on' : ''}}">★</text>
-            </view>
+            <text class="muted receipt-dim-score">{{doneSnapshot.scores.functionality || 0}} 分</text>
           </view>
         </view>
       </view>
@@ -166,24 +160,15 @@
           <view class="history-row">
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">易用性</text>
-              <view class="history-stars">
-                <text wx:for="{{5}}" wx:key="u{{index}}" class="h-star" style="color:{{item.scores.usability > index ? '#B08A47' : '#8B7B5A'}};opacity:{{item.scores.usability > index ? 1 : 0.35}}">★</text>
-              </view>
-              <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.usability || 0}}分</text>
+              <text class="muted" style="font-size:24rpx;font-weight:600;color:var(--c-accent)">{{item.scores.usability || 0}} 分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">美观性</text>
-              <view class="history-stars">
-                <text wx:for="{{5}}" wx:key="a{{index}}" class="h-star" style="color:{{item.scores.aesthetics > index ? '#B08A47' : '#8B7B5A'}};opacity:{{item.scores.aesthetics > index ? 1 : 0.35}}">★</text>
-              </view>
-              <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.aesthetics || 0}}分</text>
+              <text class="muted" style="font-size:24rpx;font-weight:600;color:var(--c-accent)">{{item.scores.aesthetics || 0}} 分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">功能性</text>
-              <view class="history-stars">
-                <text wx:for="{{5}}" wx:key="f{{index}}" class="h-star" style="color:{{item.scores.functionality > index ? '#B08A47' : '#8B7B5A'}};opacity:{{item.scores.functionality > index ? 1 : 0.35}}">★</text>
-              </view>
-              <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.functionality || 0}}分</text>
+              <text class="muted" style="font-size:24rpx;font-weight:600;color:var(--c-accent)">{{item.scores.functionality || 0}} 分</text>
             </view>
           </view>
           <view wx:if="{{item.comment}}" class="history-comment">{{item.comment}}</view>
@@ -213,23 +198,14 @@
           <view class="detail-section-title">综合评分</view>
           <view class="detail-dim-row">
             <view class="detail-dim-name">易用性</view>
-            <view class="detail-dim-stars">
-              <text wx:for="{{5}}" wx:key="du{{index}}" class="h-star {{detailItem.scores.usability > index ? 'h-star-on' : ''}}">★</text>
-            </view>
             <view class="detail-dim-num">{{detailItem.scores.usability || 0}} 分</view>
           </view>
           <view class="detail-dim-row">
             <view class="detail-dim-name">美观性</view>
-            <view class="detail-dim-stars">
-              <text wx:for="{{5}}" wx:key="da{{index}}" class="h-star {{detailItem.scores.aesthetics > index ? 'h-star-on' : ''}}">★</text>
-            </view>
             <view class="detail-dim-num">{{detailItem.scores.aesthetics || 0}} 分</view>
           </view>
           <view class="detail-dim-row">
             <view class="detail-dim-name">功能性</view>
-            <view class="detail-dim-stars">
-              <text wx:for="{{5}}" wx:key="df{{index}}" class="h-star {{detailItem.scores.functionality > index ? 'h-star-on' : ''}}">★</text>
-            </view>
             <view class="detail-dim-num">{{detailItem.scores.functionality || 0}} 分</view>
           </view>
         </view>

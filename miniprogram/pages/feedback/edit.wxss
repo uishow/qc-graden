@@ -43,9 +43,12 @@
   display: flex; align-items: center; justify-content: space-between;
 }
 .receipt-dim-name { font-size: 24rpx; flex: 0 0 auto; min-width: 100rpx; }
-.receipt-stars { display: flex; gap: 4rpx; }
-.r-star { font-size: 28rpx; color: #8B7B5A; opacity: 0.45; line-height: 1; padding: 0 2rpx; }
-.r-star-on { color: var(--c-accent); opacity: 1; }
+.receipt-dim-score {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--c-accent);
+  flex-shrink: 0;
+}
 .receipt-comment {
   background: var(--c-secondary-bg);
   border-radius: 12rpx;
@@ -100,10 +103,7 @@
   margin: 16rpx 0;
   flex-wrap: wrap;
 }
-.history-dim { display: flex; align-items: center; gap: 6rpx; }
-.history-stars { display: flex; gap: 2rpx; }
-.h-star { font-size: 24rpx; color: #8B7B5A; opacity: 0.45; line-height: 1; }
-.h-star-on { color: var(--c-accent); opacity: 1; }
+.history-dim { display: flex; align-items: center; gap: 8rpx; }
 
 .history-comment {
   background: var(--c-secondary-bg);
@@ -156,9 +156,8 @@
   width: 110rpx;
   flex-shrink: 0;
 }
-.detail-dim-stars { display: flex; gap: 2rpx; flex: 1; min-width: 0; }
 .detail-dim-num {
-  font-size: 24rpx;
+  font-size: 32rpx;
   font-weight: 600;
   color: var(--c-accent);
   flex-shrink: 0;
