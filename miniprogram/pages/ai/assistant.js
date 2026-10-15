@@ -262,9 +262,15 @@ Page({
     const fallback = '回答失败，请重试'
     const answer = result && result.ok ? (result.answer || fallback) : (result && result.message) || fallback
     // 透传 AI 降级原因 + 让用户知道是降级结果
+    // reason: 'not_configured' | 'call_failed' | 'empty_reply' | ''
     let extra = ''
-    if (result && result.ok && result.ai === false && result.aiError) {
-      extra = '\n\n（AI 暂不可用：' + result.aiError + '）'
+    if (result && result.ok && result.ai === false && result.reason) {
+      const tip = result.reason === 'not_configured'
+        ? '（AI 未配置大模型，请前往「我的 → AI 设置」）'
+        : result.reason === 'call_failed'
+          ? '（AI 调用失败：' + (result.aiError || '未知原因') + '）'
+          : '（AI 返回为空，已用项目现状兜底）'
+      extra = '\n\n' + tip
     }
     const next = this.data.messages.concat([{ role: 'ai', text: answer + extra }])
     this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })

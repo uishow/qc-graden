@@ -254,19 +254,35 @@ exports.main = async (event) => {
   let answer = null
   let ai = false
   let aiError = ''
+  let reason = ''
   try {
     answer = await callLLM(context, q)
     ai = !!answer
   } catch (e) {
     aiError = String((e && e.message) || e)
   }
-  if (!answer) answer = fallbackFromSnapshot(snap, q)
-  return { ok: true, answer, ai, aiError, contextText: context, projectName: snap.projectName || '' }
+  // 先尝试拿配置：用于精准区分「未配置」vs「调用失败」
+  let cfg = null
+  try { cfg = await getLLMConfig() } catch (e) { /* ignore */ }
+  if (!cfg) reason = 'not_configured'
+  else if (!ai) reason = aiError ? 'call_failed' : 'empty_reply'
+  if (!answer) answer = fallbackFromSnapshot(snap, q, reason, aiError)
+  return { ok: true, answer, ai, aiError, reason, contextText: context, projectName: snap.projectName || '' }
 }
 
 // 降级：直接基于 snapshot 拼一段「项目现状摘要」，作为 LLM 不可用时的兜底
-function fallbackFromSnapshot(snap, q) {
-  const lines = ['AI 当前不可用，这是你项目的现状速览：']
+// reason: 'not_configured' | 'call_failed' | 'empty_reply' | ''（兜底讲不清原因）
+function fallbackFromSnapshot(snap, q, reason, aiError) {
+  const lines = []
+  if (reason === 'not_configured') {
+    lines.push('AI 管家暂未配置大模型，请前往「我的 → AI 设置」配置 base_url / api_key / model。')
+    lines.push('配置完成后可重新提问；以下是当前项目的现状速览：')
+  } else if (reason === 'call_failed') {
+    lines.push('AI 管家调用失败：' + (aiError || '未知原因') + '。')
+    lines.push('可检查「我的 → AI 设置」中的配置是否正确；以下是当前项目的现状速览：')
+  } else {
+    lines.push('AI 当前不可用，以下是你项目的现状速览：')
+  }
   if (snap.stages && snap.stages.length) {
     const counts = { pending: 0, doing: 0, done: 0 }
     snap.stages.forEach((s) => { counts[s.status || 'pending']++ })
