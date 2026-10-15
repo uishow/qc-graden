@@ -83,7 +83,7 @@
 /* 输入条 */
 .chat-input {
   flex-shrink: 0;
-  display: flex; gap: 16rpx; align-items: center;
+  display: flex; gap: 16rpx; align-items: flex-end;
   padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
   background: var(--c-bg);
   border-top: 1rpx solid var(--c-secondary-bg);
@@ -91,10 +91,12 @@
 .chat-input-field {
   flex: 1; min-width: 0;
   background: var(--c-secondary-bg);
-  border-radius: 999rpx;
-  padding: 16rpx 28rpx;
-  font-size: 28rpx;
+  border-radius: 20rpx;
+  padding: 18rpx 24rpx;
+  font-size: 28rpx; line-height: 1.5;
   color: var(--c-text);
+  min-height: 44rpx;
+  max-height: 220rpx;
 }
 .send-btn {
   flex-shrink: 0;

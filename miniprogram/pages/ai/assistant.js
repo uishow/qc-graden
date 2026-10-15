@@ -15,8 +15,40 @@ function fen2yuan(fen, withComma) {
 const CN_NUM = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 }
 
 // 材料类型词（用于从「品牌+类型」组合名里拆品牌，如 欧派木门→品牌欧派/类型木门）。按长度降序优先匹配长词。
-const MAT_TYPE_KEYWORDS = ['整体橱柜','定制衣柜','集成吊顶','乳胶漆','美缝剂','填缝剂','大理石','石膏板','腻子粉','防盗门','推拉门','淋浴房','浴霸','铝扣板','踢脚线','门槛石','玻璃胶','密封胶','开关插座','水龙头','花洒','水槽','门锁','合页','导轨','置物架','地漏','角阀','软管','壁纸','壁布','油漆','涂料','木门','地板','瓷砖','橱柜','衣柜','沙发','床垫','床架','马桶','龙头','开关','插座','灯具','水管','电线','石材','水泥','地毯','窗帘','门','漆','砖']
+// 材料类型词（用于从「品牌+类型」组合名里拆品牌，如 欧派木门→品牌欧派/类型木门）。按长度降序优先匹配长词。
+// 复合类型（木地板/实木地板…）放前面，保证先于「地板」命中；属性词见 MAT_ATTR_WORDS，不在此列。
+const MAT_TYPE_KEYWORDS = ['木地板','实木地板','复合地板','强化地板','实木复合地板','铝合金门窗','断桥铝门窗','实木门','整体橱柜','定制衣柜','集成吊顶','乳胶漆','美缝剂','填缝剂','大理石','石膏板','腻子粉','防盗门','推拉门','淋浴房','浴霸','铝扣板','踢脚线','门槛石','玻璃胶','密封胶','开关插座','水龙头','花洒','水槽','门锁','合页','导轨','置物架','地漏','角阀','软管','壁纸','壁布','油漆','涂料','木门','地板','瓷砖','橱柜','衣柜','沙发','床垫','床架','马桶','龙头','开关','插座','灯具','水管','电线','石材','水泥','地毯','窗帘','门','漆','砖']
   .sort((a, b) => b.length - a.length)
+
+// 材料属性/特征词（拆分「品牌+类型」时，这些词不应被判为品牌，如「实木地板」的「实木」）
+const MAT_ATTR_WORDS = ['实木','复合','强化','进口','国产','原木','生态','烤漆','免漆','哑光','半哑','高光','亮光','防水','防滑','通体','欧式','现代','简欧','北欧','中式','美式','日式','新中式','仿古','复古','轻奢','极简','无醛','环保','免胶','自粘','竹','塑','铝','钢','铜','铁','玻璃','亚克力']
+
+// 从候选品牌前缀里剔除属性词，剩余部分才是真正品牌名（实木→空，欧派→欧派，大自然实木→大自然）
+function stripAttr(s) {
+  let r = String(s || '')
+  MAT_ATTR_WORDS.forEach((w) => { r = r.split(w).join('') })
+  return r.trim()
+}
+
+// 显式品牌：品牌是X / 品牌：X / 牌子X / 商标X / 牌号X
+function extractDeclaredBrand(text) {
+  const decl = text.match(/(?:品牌|牌子|商标|牌号)\s*(?:是|[:：])?\s*([\u4e00-\u9fa5A-Za-z0-9·•\-]{1,12})/)
+  if (decl && decl[1]) {
+    const b = decl[1].trim()
+    if (b && MAT_ATTR_WORDS.indexOf(b) === -1) return { brand: b, raw: decl[0] }
+  }
+  return null
+}
+
+// 后缀品牌：X牌 + 材料类型词（如「大自然牌地板」）
+function extractSuffixBrand(text) {
+  const suf = text.match(/([\u4e00-\u9fa5A-Za-z0-9·•]{1,10})牌(?=木门|木地板|地板|实木门|门|窗|砖|漆|板|材|橱柜|衣柜|瓷砖|涂料|乳胶漆|吊顶|插座|龙头|花洒|水槽|灯具|壁纸|壁布|地毯|窗帘|五金)/)
+  if (suf && suf[1]) {
+    const b = suf[1].trim()
+    if (b && !['名', '招', '铜', '铁', '铝'].includes(b)) return { brand: b, raw: suf[0] }
+  }
+  return null
+}
 
 // —— 从文本里匹配「项目已知名字」（房间/阶段）转 id 数组 ——
 // 策略：文本包含某名字子串即命中；名字按长度降序匹配，长名优先（避免「卫生」误中「卫生间」）
@@ -324,6 +356,14 @@ Page({
     let body = text.slice(head[0].length).replace(/^[\s，,：:、]+/, '').trim()
     if (!body) return null
 
+    // 品牌：先抽显式声明（品牌是X / 品牌：X / 牌子X / X牌）并移出 body，避免泄漏进 name
+    let brand = ''
+    const decl = extractDeclaredBrand(body) || extractSuffixBrand(body)
+    if (decl) {
+      brand = decl.brand
+      body = body.replace(decl.raw, ' ').replace(/\s+/g, ' ').trim()
+    }
+
     // 单位表覆盖常见装修材料单位
     // ★ alternation 必须把更长的组合单位（平方/平米）放最左，否则「5 平方」会被拆成「5 平」+「方...」
     const unitList = '平方|平米|张|个|件|块|套|片|根|米|条|箱|包|盒|双|对|扇|台|把|只|卷|桶|本'
@@ -378,10 +418,18 @@ Page({
     if (!name || name.length < 2) return null
 
     // 从「品牌+类型」组合名拆出品牌（如 欧派木门 → brand=欧派, name=木门）
-    let brand = ''
-    for (const kw of MAT_TYPE_KEYWORDS) {
-      const idx = name.indexOf(kw)
-      if (idx >= 2) { brand = name.slice(0, idx); name = name.slice(idx); break }
+    // 仅当没有显式品牌时，才做保守子串拆分：候选前缀剔除属性词后仍≥2字才算品牌，
+    // 否则（如「实木地板」前缀是属性词）保持 name 完整、不留空品牌
+    if (!brand) {
+      for (const kw of MAT_TYPE_KEYWORDS) {
+        const idx = name.indexOf(kw)
+        if (idx >= 2) {
+          const cand = name.slice(0, idx)
+          const stripped = stripAttr(cand)
+          if (stripped.length >= 2) { brand = stripped; name = name.slice(idx) }
+          break
+        }
+      }
     }
 
     return {
@@ -467,15 +515,15 @@ Page({
     const t = String(text || '')
     const isQuestion = /[?？]|怎么|如何|为什么|为何|啥|哪|多少|几|查询|统计|分析|看看|吗\s*$|呢\s*$/.test(t)
     const hasMat = /录入|添加|登记|加一笔|材料|建材|清单/.test(t)
-    const hasDiary = /记日记|写日记|记一篇日记|记录日记|日记/.test(t)
+    const hasDiary = /记日记|写日记|记一篇日记|记录日记|日记(?!本)/.test(t)
     const hasExp = /记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了|花\b/.test(t)
     const qty = this._hasQtyUnit(t)
     const amt = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/.test(t)
     const pricey = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)|单价|总价|合计|每/.test(t)
     const hasDate = /今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2})/.test(t)
     const knownName = this._matchRoomIds(t).length > 0 || this._matchStageIds(t).length > 0
-    if (hasMat && !isQuestion) return 'material'
     if (hasDiary && !isQuestion) return 'diary'
+    if (hasMat && !isQuestion) return 'material'
     if (qty && pricey) return 'material' // 欧派木门三张 300一张
     if (hasExp && amt) return 'expense' // 有金额 = 录入花费
     if (hasExp && qty) return 'material' // 记一笔瓷砖 10块（无价格按材料上下文）
@@ -514,7 +562,7 @@ Page({
     const roomIds = this._matchRoomIds(text)
     const stageIds = this._matchStageIds(text)
     let body = text
-    body = body.replace(/(记日记|写日记|记一篇日记|记录日记|日记|记录|记一下|记一笔)/g, ' ')
+    body = body.replace(/(录入|记日记|写日记|记一篇日记|记录日记|日记|记录|记一下|记一笔)/g, ' ')
     body = body.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
     // 已知房间/阶段名仅当剥离后正文仍有内容时才移除，避免正文被掏空导致解析失败
     let stripped = body

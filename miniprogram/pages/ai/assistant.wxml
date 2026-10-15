@@ -54,16 +54,16 @@
     <view style="height:24rpx"></view>
   </scroll-view>
 
-  <!-- 输入条（键盘弹起抬升：margin-bottom = kbHeight） -->
+  <!-- 输入条（键盘弹起抬升：margin-bottom = kbHeight）。多行 textarea 自动增高，便于录入长文本 -->
   <view class="chat-input" style="margin-bottom:{{kbHeight}}px">
-    <input
+    <textarea
       class="chat-input-field"
       value="{{input}}"
-      confirm-type="send"
+      auto-height
+      maxlength="500"
       adjust-position="{{false}}"
-      placeholder="问你的装修管家…"
+      placeholder="问装修管家，或录入材料 / 花费 / 日记（多行可见，便于看全信息）"
       bindinput="onInput"
-      bindconfirm="send"
     />
     <view class="send-btn {{loading || !input ? 'send-disabled' : ''}}" bindtap="send">发送</view>
   </view>
