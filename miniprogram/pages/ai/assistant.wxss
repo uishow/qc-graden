@@ -71,6 +71,55 @@
   border-radius: 18rpx 18rpx 4rpx 18rpx;
 }
 
+/* 录入预览确认卡 */
+.entry-card {
+  width: 100%;
+  max-width: 560rpx;
+  background: var(--c-card);
+  border: 1rpx solid var(--c-card-border);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  box-sizing: border-box;
+}
+.entry-head {
+  font-size: 26rpx; font-weight: 500;
+  color: var(--c-text);
+  margin-bottom: 12rpx;
+}
+.entry-row {
+  display: flex; align-items: baseline;
+  font-size: 26rpx; line-height: 1.7;
+}
+.entry-k {
+  flex-shrink: 0; width: 96rpx;
+  color: var(--c-text-2);
+  margin-right: 16rpx;
+}
+.entry-v {
+  flex: 1; color: var(--c-text);
+  word-break: break-all;
+}
+.entry-actions {
+  display: flex; gap: 16rpx;
+  margin-top: 18rpx;
+}
+.entry-btn {
+  flex: 1; text-align: center;
+  font-size: 26rpx; font-weight: 500;
+  padding: 16rpx 0;
+  border-radius: 10rpx;
+}
+.entry-cancel {
+  background: var(--c-secondary-bg);
+  color: var(--c-text-2);
+}
+.entry-ok {
+  background: var(--c-primary);
+  color: #ffffff;
+}
+.entry-ok:active { opacity: 0.85; }
+.entry-cancel:active { opacity: 0.85; }
+
 .typing { white-space: normal; display: flex; align-items: center; padding: 20rpx 24rpx; }
 .dot { font-size: 24rpx; margin: 0 5rpx; color: var(--c-text-2); animation: dot-blink 1.2s infinite; }
 .d2 { animation-delay: 0.2s; }

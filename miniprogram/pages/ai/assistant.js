@@ -280,6 +280,7 @@ Page({
     snapshot: {}, // 发往云函数的
     snapshotView: {}, // 顶部卡显示
     firstRoom: '',
+    pending: null, // 待确认的录入预览 { kind, parsed, rows }
   },
 
   onLoad() {
@@ -606,17 +607,80 @@ Page({
     return { title, content, diary_date: diaryDate, room_ids: roomIds, stage_ids: stageIds, original: text.trim() }
   },
 
-  // —— 录入统一分发：先用启发式，失败且 LLM 已配则走 LLM 兜底提取 ——
-  async _handleEntry(intent, text) {
-    let parsed = null
-    if (intent === 'material') parsed = this.tryParseIntakeMaterial(text)
-    else if (intent === 'expense') parsed = this.tryParseExpense(text)
-    else if (intent === 'diary') parsed = this.tryParseDiary(text)
-    if (parsed) return this._writeEntry(intent, parsed)
-    // 启发式未命中 → LLM 兜底提取（已配时）
-    const extracted = await this._llmExtract(intent, text)
-    if (extracted) return this._writeEntry(intent, extracted)
-    return this._formatHint(intent)
+  // —— 先解析，不直接落库：返回结构化对象（启发式优先，失败则 LLM 兜底）——
+  _tryParse(intent, text) {
+    if (intent === 'material') return this.tryParseIntakeMaterial(text)
+    if (intent === 'expense') return this.tryParseExpense(text)
+    if (intent === 'diary') return this.tryParseDiary(text)
+    return null
+  },
+
+  // 把解析结果转成预览卡片的「字段行」
+  _entryRows(kind, p) {
+    const yuan = (fen) => (Number(fen || 0) / 100).toFixed(2)
+    const roomMap = {}; (this.data.snapshot.rooms || []).forEach((r) => { roomMap[r.id] = r.name })
+    const stageMap = {}; (this.data.snapshot.stages || []).forEach((s) => { stageMap[s.id] = s.name })
+    const names = (ids) => (ids || []).map((id) => roomMap[id] || stageMap[id] || id).join('、') || '—'
+    if (kind === 'material') {
+      return [
+        ['名称', p.name || '—'],
+        ['品牌', p.brand || '—'],
+        ['数量', p.quantity + ' ' + p.unit],
+        ['单价', '¥' + yuan(p.unit_price)],
+        ['合计', '¥' + yuan(p.total_price)],
+        ['备注', p.note || '—'],
+      ]
+    }
+    if (kind === 'expense') {
+      const tn = { labor: '人工', design: '设计', deposit: '订金/定金', other: '其他', material: '材料' }[p.type] || '其他'
+      return [
+        ['金额', '¥' + yuan(p.amount)],
+        ['类别', tn],
+        ['备注', p.remark || '—'],
+        ['阶段', names(p.stage_ids)],
+        ['日期', p.pay_date || '—'],
+      ]
+    }
+    return [
+      ['日期', p.diary_date || '—'],
+      ['标题', p.title || '—'],
+      ['内容', (p.content || '').slice(0, 60) || '—'],
+      ['房间', names(p.room_ids)],
+      ['阶段', names(p.stage_ids)],
+    ]
+  },
+
+  // 追加一条消息（ai/user/entry 卡片通用）
+  _appendMessage(m) {
+    const messages = this.data.messages.concat([m])
+    this.setData({ messages, loading: false, lastId: 'msg' + (messages.length - 1) })
+  },
+
+  // 解析成功 → 展示预览卡，等用户确认再写
+  _showEntryPreview(intent, parsed) {
+    const entry = { kind: intent, parsed, rows: this._entryRows(intent, parsed) }
+    this.setData({ pending: entry, loading: false })
+    this._appendMessage({ role: 'ai', type: 'entry', entry })
+  },
+
+  // 用户点「确认写入」：真正落库（含自动跳转）
+  async confirmEntry() {
+    const entry = this.data.pending
+    if (!entry) return
+    this.setData({ pending: null })
+    try {
+      const reply = await this._writeEntry(entry.kind, entry.parsed)
+      this._appendMessage({ role: 'ai', text: reply })
+    } catch (e) {
+      this._appendMessage({ role: 'ai', text: '写入失败：' + (e && e.message ? e.message : '未知错误') })
+    }
+  },
+
+  // 用户点「取消」：丢弃本次解析
+  cancelEntry() {
+    if (!this.data.pending) return
+    this.setData({ pending: null })
+    this._appendMessage({ role: 'ai', text: '已取消本次录入。' })
   },
 
   async _writeEntry(intent, data) {
@@ -997,8 +1061,10 @@ Page({
         }
         const intent = this.detectIntent(text)
         if (intent) {
-          const reply = await this._handleEntry(intent, text)
-          finish(reply)
+          // 先解析（启发式优先，失败走 LLM 兜底）；解析成功后弹预览卡，确认才落库
+          const parsed = this._tryParse(intent, text) || (await this._llmExtract(intent, text))
+          if (parsed) { this._showEntryPreview(intent, parsed); return }
+          finish(this._formatHint(intent))
           return
         }
       }
