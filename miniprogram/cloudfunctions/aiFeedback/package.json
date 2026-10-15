@@ -1,0 +1,9 @@
+{
+  "name": "aiFeedback",
+  "version": "1.0.0",
+  "description": "AI 管家反馈闭环：采集「没帮上忙」信号 + 管理员聚合查看（ai_feedback 安全规则 read/write=false）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}
