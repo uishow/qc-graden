@@ -39,6 +39,11 @@
 - 云函数内主键是 `_id` 不是 `id`（组装回传 id 用 `a._id || a.id`）。
 - 时间显示统一 `utils/time.js.formatLocal`（DB 存 UTC 串，强制 +8h；勿用 toLocaleString，HarmonyOS 不准）；云函数内联同款。
 - `app_feedback` 集合 `.order()` 报 not a function：改拉全表 + JS sort；新集合第一时间建 created_at 索引。
+- **拼 where 条件的辅助函数必须同步**：曾把 `visibleWhere` 写成 `async`，`where(一个 Promise)` 会让条件
+  **静默失效**（`Object.keys(promise)` 为空 → 全部命中），一行都挡不住且测试初看能跑。
+- 云函数聚合查询用 `fetchAll` 分页（100/页、最多 10 页），别 `limit(500)`：单次上限各环境不一致会静默少算。
+- 云函数可脱离真环境单测：`Module._load` 桩掉 `wx-server-sdk` + 内存版 CloudBase，直接调 `exports.main`
+  （见 `tests/ai-feedback.harness.js`），权限门禁这类逻辑一定要这样测，否则只能靠线上试。
 
 ## AI 管家（pages/ai/assistant.js）录入字段映射（2026-10-15 关键）
 - 录入走启发式解析（材料/花费/日记）+ LLM 兜底（`aiAssistant` mode:'extract'）。`send()` 用 try/catch+`finish()` 复位 loading，严禁裸调 Page 方法（须 `this.`）。
@@ -52,6 +57,13 @@
 - 中文 NP 解析要点：head 不强制 `\s+`；总价 bMatch 先于裸 priceReC；name 清理先剥 bMatch 再 aMatch；alternation 长选项放最左；unitRe 用 alternation 非字符类。
 - **意图路由顺序（send 内固定）**：`_routeQuery`（统计问答）→ `_isDiaryLookup`（显示日记附件，2-gram+DF 选篇→createSignedUrls 气泡渲染图）→ `detectIntent`（录入）。显示/找出/打开/搜等动词一律进 isQuestion 不算录入；hasDiary 判在 hasMat 前（`日记(?!本)`）。
 - 显式字段声明优先：材料 `品牌是X/牌子X/X牌`（MAT_ATTR_WORDS 属性词表 stripAttr 防实木当品牌）；花费 `备注/说明/事由` `类型/类别`；金额兜底 `花了500/金额：500` 无元形态。
-- 录入成功 `_afterEntryJump` 0.9s 后 switchTab：日记→diary/list，花费/材料→budget/overview。
+- **录入成功后不自动跳转**（用户 2026-10-15 要求去掉，已删 `_afterEntryJump` 及 3 处调用）；回执改为「可在「XX」页查看…」。
 - **技术路线决策（2026-10-15）：混合渐进——① 先上预览确认卡（解析成功弹字段卡，确认才落库，最高 ROI）② 再上 LLM 结构化抽取（部署 aiAssistant extract + JSON schema + 校验修复，正则退兜底）③ 最后引导式半屏表单。Phase1 已落地。**
-- Node stub 坑：`utils/cloud.js` 是具名导出 `{ cloud }`，桩必须 `{ cloud: {...} }` 包裹，否则解构 undefined 抛错被兜底吞成 null。
+- Node stub 坑：`utils/cloud.js` 是具名导出 `{ cloud }`，桩必须 `{ cloud: {...} }` 包裹，否则解构 undefined 抛错被兜底吞成 null；新增依赖（如 `utils/aiFeedback`）必须同步在 harness 的 `Module._load` 里补桩。
+
+## 反馈闭环（2026-10-15 建成，用户「全做」）
+- 结构：埋点（`assistant.js` 7 类信号）→ 集合 `ai_feedback`（规则 read/write=false）→ 云函数 `aiFeedback`（log/list/setStatus/summary，管理员=members role owner|family）→ 待办台 `pages/ai/feedback`（我的页管理员入口+角标）。
+- 信号：edit_diff（最高价值，带 understood/fixed 标准答案）> unparsed > thumb_down > no_result > retry > cancel > degraded。
+- **retry 判定阈值：2-gram 重合率 ≥0.8 且长度比 ≥0.6**（0.6 会把「水电阶段花了多少/木工阶段花了多少」误判重问）。
+- 待办台「复制待办」导出「原文+AI解析+用户改后答案」，可直接贴给 AI 批量修并补回归用例。
+- 部署依赖：控制台建 `ai_feedback` 集合 + 建 created_at 索引 + 规则改 false；`aiFeedback` 与 `aiAssistant` 都要重新上传部署。
