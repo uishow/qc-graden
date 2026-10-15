@@ -47,4 +47,11 @@
   - 花费：`amount`(分)、`type`、`pay_date`、`stage_ids`+`stage_id`、`belong`、`remark`、`created_at`+`updated_at`、`deleted:false`。
   - 日记：`title/content/diary_date/room_ids`+`room_id`/`stage_ids`+`stage_id`/`created_at`+`updated_at`/`deleted:false`。
   - `dataWrite` 透传 `event.data`，字段名完全由前端负责；落库后用「我的/日记/花费/材料」页确认识别。
+- **`snapshot` 没有 id，`raw` 才有**（2026-10-15 大坑）：`buildSnapshot` 返回的 `snapshot`（发 LLM 用）里 rooms/stages 只有 `name`；带 `id` 的原始数组在 `raw`。凡「名字→id 映射」或「id→名字」必须用 `raw`（`_matchStageIds/_matchRoomIds`、`_adaptLLMData` 的 nameToId、`_entryRows` 的 roomMap/stageMap）。用 snapshot 会得到 `undefined` id → **阶段/房间关联静默丢失**（即「数据未对应到字段」）。纯名字列表用 `_knownStageNames()/_knownRoomNames()`（不过滤长度；剥词时自行 `.filter(n=>n.length>=2)`）。快照卡**展示**文本在 `snapshotView`（`stagesText/spentText/...`），不在 `snapshot`。
+- **写 harness 桩必须还原真实数据形状**：曾给桩 `snapshot` 塞 id，把这个 bug 完全掩盖（测试全绿、线上坏）。另外微信 `setData` 支持路径键（`form.stage_ids`），桩里 `Object.assign` 不支持，需手写 path-set；`wx.showToast` 等也要补桩。
 - 中文 NP 解析要点：head 不强制 `\s+`；总价 bMatch 先于裸 priceReC；name 清理先剥 bMatch 再 aMatch；alternation 长选项放最左；unitRe 用 alternation 非字符类。
+- **意图路由顺序（send 内固定）**：`_routeQuery`（统计问答）→ `_isDiaryLookup`（显示日记附件，2-gram+DF 选篇→createSignedUrls 气泡渲染图）→ `detectIntent`（录入）。显示/找出/打开/搜等动词一律进 isQuestion 不算录入；hasDiary 判在 hasMat 前（`日记(?!本)`）。
+- 显式字段声明优先：材料 `品牌是X/牌子X/X牌`（MAT_ATTR_WORDS 属性词表 stripAttr 防实木当品牌）；花费 `备注/说明/事由` `类型/类别`；金额兜底 `花了500/金额：500` 无元形态。
+- 录入成功 `_afterEntryJump` 0.9s 后 switchTab：日记→diary/list，花费/材料→budget/overview。
+- **技术路线决策（2026-10-15）：混合渐进——① 先上预览确认卡（解析成功弹字段卡，确认才落库，最高 ROI）② 再上 LLM 结构化抽取（部署 aiAssistant extract + JSON schema + 校验修复，正则退兜底）③ 最后引导式半屏表单。Phase1 已落地。**
+- Node stub 坑：`utils/cloud.js` 是具名导出 `{ cloud }`，桩必须 `{ cloud: {...} }` 包裹，否则解构 undefined 抛错被兜底吞成 null。
