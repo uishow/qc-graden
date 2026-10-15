@@ -1,0 +1,9 @@
+{
+  "name": "feedbackSubmit",
+  "version": "1.0.0",
+  "description": "APP 评价与意见提交（写 app_feedback，客户端 write=false 必经本函数）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

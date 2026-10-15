@@ -1,0 +1,64 @@
+/* 通用令牌由 app.wxss 提供 */
+
+.field-title { font-weight: 600; font-size: 30rpx; margin-bottom: 20rpx; }
+
+/* 三维评分：每行左侧「维度名+提示」右侧 5 星 */
+.rate-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 0; border-top: 1rpx solid var(--c-card-border); }
+.rate-row-first { /* 顶部用 card 的内边距替代，不用再加 border-top */ }
+.rate-row-last { border-bottom: none; }
+.rate-label { min-width: 0; flex: 1; }
+.rate-name { font-size: 30rpx; font-weight: 600; color: var(--c-text); }
+.rate-hint { font-size: 22rpx; margin-top: 4rpx; }
+.rate-stars { display: flex; gap: 8rpx; flex-shrink: 0; margin-left: 16rpx; }
+.star {
+  font-size: 44rpx; line-height: 1; color: var(--c-card-border);
+  padding: 6rpx 4rpx; cursor: pointer;
+  transition: color .15s ease;
+}
+.star-on { color: var(--c-accent); }
+
+/* 意见框：更高的最小高度 + 自增高度 */
+.feedback-textarea { min-height: 320rpx; }
+.feedback-count { text-align: right; font-size: 22rpx; margin-top: -8rpx; }
+
+/* 提交流程按钮 */
+.submit-btn { margin-top: 16rpx; }
+
+.done-card { padding: 40rpx 24rpx 32rpx; }
+
+/* 提交回执：把用户刚提交的内容再展示一遍（用户点完「提交」看不到自己填了什么，这里就是确认） */
+.receipt { margin-top: 28rpx; text-align: left; }
+.receipt-row {
+  border-top: 1rpx solid var(--c-card-border);
+  padding: 22rpx 0;
+}
+.receipt-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: 16rpx;
+}
+.receipt-grid { display: flex; flex-direction: column; gap: 12rpx; }
+.receipt-dim {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.receipt-dim-name { font-size: 24rpx; flex: 0 0 auto; min-width: 100rpx; }
+.receipt-stars { display: flex; gap: 4rpx; }
+.r-star { font-size: 28rpx; color: var(--c-card-border); line-height: 1; padding: 0 2rpx; }
+.r-star-on { color: var(--c-accent); }
+.receipt-comment {
+  background: var(--c-secondary-bg);
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--c-text);
+}
+.receipt-time {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: var(--c-text-2);
+  text-align: right;
+}

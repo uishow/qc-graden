@@ -1,0 +1,5 @@
+{
+  "timeout": 15,
+  "memorySize": 128,
+  "installDependency": true
+}

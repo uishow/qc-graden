@@ -1,0 +1,131 @@
+<view class="page-root {{theme}}">
+
+  <view class="title-serif" style="margin-bottom:8rpx">APP 评价与意见</view>
+  <view class="muted" style="margin-bottom:24rpx">您的反馈会推动我们改进，先打个分，再写下想说的话。</view>
+
+  <!-- 三维评分（易用性 / 美观性 / 功能性），每行 5 颗可点星 -->
+  <view class="card" wx:if="{{!done}}">
+    <view class="field-title">综合评分</view>
+
+    <view class="rate-row">
+      <view class="rate-label">
+        <view class="rate-name">易用性</view>
+        <view class="muted rate-hint">上手与日常使用顺畅度</view>
+      </view>
+      <view class="rate-stars">
+        <view
+          wx:for="{{5}}"
+          wx:key="u{{index}}"
+          class="star {{scores.usability > index ? 'star-on' : ''}}"
+          bindtap="setScore"
+          data-field="usability"
+          data-value="{{index + 1}}"
+        >★</view>
+      </view>
+    </view>
+
+    <view class="rate-row">
+      <view class="rate-label">
+        <view class="rate-name">美观性</view>
+        <view class="muted rate-hint">界面与排版观感</view>
+      </view>
+      <view class="rate-stars">
+        <view
+          wx:for="{{5}}"
+          wx:key="a{{index}}"
+          class="star {{scores.aesthetics > index ? 'star-on' : ''}}"
+          bindtap="setScore"
+          data-field="aesthetics"
+          data-value="{{index + 1}}"
+        >★</view>
+      </view>
+    </view>
+
+    <view class="rate-row rate-row-last">
+      <view class="rate-label">
+        <view class="rate-name">功能性</view>
+        <view class="muted rate-hint">功能完整与可用程度</view>
+      </view>
+      <view class="rate-stars">
+        <view
+          wx:for="{{5}}"
+          wx:key="f{{index}}"
+          class="star {{scores.functionality > index ? 'star-on' : ''}}"
+          bindtap="setScore"
+          data-field="functionality"
+          data-value="{{index + 1}}"
+        >★</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 意见与建议（maxlength=-1 防 140 截断；auto-height 跟随内容自增） -->
+  <view class="card" wx:if="{{!done}}">
+    <view class="field-title">意见与建议</view>
+    <textarea
+      class="textarea feedback-textarea"
+      placeholder="想吐槽、想新功能、想改进的地方…（选填，限 1000 字）"
+      placeholder-class="muted"
+      maxlength="{{-1}}"
+      auto-height
+      value="{{comment}}"
+      bindinput="onCommentInput"
+    ></textarea>
+    <view class="muted feedback-count">{{comment.length}}/1000</view>
+  </view>
+
+  <!-- 提交按钮（提交后整段表单隐藏，只留回执卡片） -->
+  <view wx:if="{{!done}}" class="btn-primary submit-btn" bindtap="submit">{{submitting ? '提交中…' : '提交评价'}}</view>
+
+  <!-- 提交成功：感谢 + 回执（这里复现你刚提交的内容，方便确认「提交的就是这个」；原来只显示感谢文案，用户看不到自己写的话） -->
+  <view wx:if="{{done && doneSnapshot}}" class="card done-card">
+    <view style="text-align:center">
+      <view style="font-size:60rpx;line-height:1">✅</view>
+      <view style="font-weight:600;font-size:32rpx;margin-top:12rpx">感谢您的反馈</view>
+      <view class="muted" style="margin-top:8rpx">已收到，以下是你刚提交的内容</view>
+    </view>
+
+    <view class="receipt">
+      <!-- 综合评分回执 -->
+      <view wx:if="{{doneSnapshot.hasScores}}" class="receipt-row">
+        <view class="receipt-title">综合评分</view>
+        <view class="receipt-grid">
+          <view class="receipt-dim">
+            <text class="muted receipt-dim-name">易用性</text>
+            <text class="receipt-stars">
+              <text wx:for="{{5}}" wx:key="ru{{index}}" class="r-star {{doneSnapshot.scores.usability > index ? 'r-star-on' : ''}}">★</text>
+            </text>
+          </view>
+          <view class="receipt-dim">
+            <text class="muted receipt-dim-name">美观性</text>
+            <text class="receipt-stars">
+              <text wx:for="{{5}}" wx:key="ra{{index}}" class="r-star {{doneSnapshot.scores.aesthetics > index ? 'r-star-on' : ''}}">★</text>
+            </text>
+          </view>
+          <view class="receipt-dim">
+            <text class="muted receipt-dim-name">功能性</text>
+            <text class="receipt-stars">
+              <text wx:for="{{5}}" wx:key="rf{{index}}" class="r-star {{doneSnapshot.scores.functionality > index ? 'r-star-on' : ''}}">★</text>
+            </text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 意见回执 -->
+      <view wx:if="{{doneSnapshot.hasComment}}" class="receipt-row">
+        <view class="receipt-title">意见与建议</view>
+        <view class="receipt-comment">{{doneSnapshot.comment}}</view>
+      </view>
+
+      <view wx:if="{{doneSnapshot.submittedAt}}" class="receipt-time">
+        提交于 {{doneSnapshot.submittedAt}}
+      </view>
+    </view>
+
+    <view class="row" style="gap:16rpx;margin-top:28rpx">
+      <view class="btn-outline flex1" bindtap="resetAgain">再写一条</view>
+      <view class="btn-primary flex1" bindtap="goBack">返回「我的」</view>
+    </view>
+  </view>
+
+</view>
