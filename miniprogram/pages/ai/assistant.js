@@ -191,6 +191,7 @@ async function buildSnapshot(projectId) {
 
   // 快照卡显示用文本（数字走 fen2yuan 转元）
   const stagesText = stagesData.length
+
     ? '共 ' + stagesData.length + ' 段（未开始 ' + stageCounts.pending + ' / 进行中 ' + stageCounts.doing + ' / 已完成 ' + stageCounts.done + (doingStage ? '，当前「' + doingStage.name + '」' : '') + '）'
     : '尚未设置'
   const spentText = fen2yuan(totalExp, true) + ' 元'
@@ -210,6 +211,15 @@ async function buildSnapshot(projectId) {
       materialsText,
       roomsText,
       diariesText,
+    },
+    // 原始数组：供 AI 管家「多维分析」做客户端真实聚合（computeStats）
+    // 不直接进 LLM 快照，避免 prompt 过长
+    raw: {
+      expenses: (expensesAll.data || []),
+      materials: (materialsAll.data || []),
+      diaries: diariesData,
+      stages: stagesData,
+      rooms: roomsData,
     },
     firstRoom,
   }
@@ -378,6 +388,9 @@ Page({
     const projectId = store.getCurrentProjectId()
     if (!projectId) return '当前没有项目，无法录入。'
     try {
+      // 字段必须与 materials 集合读取端一致：备注是 remark（不是 note），并补齐
+      // belong/sub/stage_ids/attachments/created_at/updated_at（material/edit.js 写入的字段）
+      const now = new Date().toISOString()
       const data = {
         name: intake.name,
         category: '其他',
@@ -389,7 +402,14 @@ Page({
         total_price: intake.total_price,
         planned_price: intake.total_price,
         status: 'to_buy',
-        note: intake.note,
+        belong: '',
+        sub: '',
+        stage_ids: [],
+        stage_id: '',
+        attachments: [],
+        remark: intake.note, // 原 note（用户原始要求/备注）映射到 remark
+        created_at: now,
+        updated_at: now,
       }
       const r = await write.insert('materials', projectId, { ...data, version: 1, project_id: projectId })
       if (r && r.error) {
@@ -412,6 +432,353 @@ Page({
     }
   },
 
+  // ============ 2026-10-15 录入/分析增强：日记 + 花费 + 多维分析 ============
+
+  _todayStr() {
+    const d = new Date()
+    const p = (n) => (n < 10 ? '0' + n : '' + n)
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+  },
+
+  // 文本是否含「数字+单位」（材料量词特征）
+  _hasQtyUnit(text) {
+    const unitList = '平方|平米|张|个|件|块|套|片|根|米|条|箱|包|盒|双|对|扇|台|把|只|卷|桶|本'
+    return new RegExp('(\\d+|一|二|两|三|四|五|六|七|八|九|十)\\s*(' + unitList + ')').test(text)
+  },
+
+  _matchStageIds(text) { return matchNameIds(text, this.data.snapshot.stages || [], 'name') },
+  _matchRoomIds(text) { return matchNameIds(text, this.data.snapshot.rooms || [], 'name') },
+
+  // —— 意图识别：材料 / 花费 / 日记 / null（非录入）——
+  detectIntent(text) {
+    const t = String(text || '')
+    const hasMat = /录入|添加|登记|加一笔|材料|建材|清单/.test(t)
+    const hasDiary = /记日记|写日记|记一篇日记|记录日记|日记/.test(t)
+    const hasExp = /记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了|花\b/.test(t)
+    const qty = this._hasQtyUnit(t)
+    const amt = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/.test(t)
+    const pricey = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)|单价|总价|合计|每/.test(t)
+    const hasDate = /今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2})/.test(t)
+    if (hasMat) return 'material'
+    if (hasDiary) return 'diary'
+    if (qty && pricey) return 'material' // 欧派木门三张 300一张
+    if (hasExp && amt) return 'expense'
+    if (hasExp && qty) return 'material' // 记一笔瓷砖 10块（无价格按材料上下文）
+    if (hasExp) return 'expense'
+    if (hasDate && !amt) return 'diary' // 今天…叙述
+    return null
+  },
+
+  // —— 花费解析：金额(分) + 类型 + 支付日期 + 阶段 + 备注 ——
+  tryParseExpense(text) {
+    const amtRe = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/
+    const m = text.match(amtRe)
+    if (!m) return null
+    const amountFen = Math.round(Number(m[1]) * 100)
+    if (!amountFen) return null
+    let type = 'other'
+    if (/人工|工钱|工人|师傅/.test(text)) type = 'labor'
+    else if (/设计/.test(text)) type = 'design'
+    else if (/订金|定金|预付款/.test(text)) type = 'deposit'
+    const payDate = parseDateFromText(text)
+    const stageIds = this._matchStageIds(text)
+    let remark = text
+    remark = remark.replace(amtRe, ' ')
+    remark = remark.replace(/(人工|工钱|工人|师傅|设计|订金|定金|预付款|花费|支出|付款|付了|报销|开支|消费|记一笔|记一下|花)/g, ' ')
+    remark = remark.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
+    ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
+    ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
+    remark = remark.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+    return { amount: amountFen, type, pay_date: payDate, stage_ids: stageIds, remark, original: text.trim() }
+  },
+
+  // —— 日记解析：日期 + 房间 + 阶段 + 标题(首句) + 正文 ——
+  tryParseDiary(text) {
+    const diaryDate = parseDateFromText(text)
+    const roomIds = this._matchRoomIds(text)
+    const stageIds = this._matchStageIds(text)
+    let body = text
+    body = body.replace(/(记日记|写日记|记一篇日记|记录日记|日记|记录|记一下|记一笔)/g, ' ')
+    body = body.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
+    ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) body = body.split(n).join(' ') })
+    ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) body = body.split(n).join(' ') })
+    body = body.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!body || body.length < 2) return null
+    const firstSentence = body.split(/[。！？\n]/)[0].trim()
+    const title = (firstSentence || body).slice(0, 20) || '日记'
+    return { title, content: body, diary_date: diaryDate, room_ids: roomIds, stage_ids: stageIds, original: text.trim() }
+  },
+
+  // —— 录入统一分发：先用启发式，失败且 LLM 已配则走 LLM 兜底提取 ——
+  async _handleEntry(intent, text) {
+    let parsed = null
+    if (intent === 'material') parsed = this.tryParseIntakeMaterial(text)
+    else if (intent === 'expense') parsed = this.tryParseExpense(text)
+    else if (intent === 'diary') parsed = this.tryParseDiary(text)
+    if (parsed) return this._writeEntry(intent, parsed)
+    // 启发式未命中 → LLM 兜底提取（已配时）
+    const extracted = await this._llmExtract(intent, text)
+    if (extracted) return this._writeEntry(intent, extracted)
+    return this._formatHint(intent)
+  },
+
+  async _writeEntry(intent, data) {
+    if (intent === 'material') return this._handleIntakeMaterial(data)
+    if (intent === 'expense') return this._handleIntakeExpense(data)
+    if (intent === 'diary') return this._handleIntakeDiary(data)
+    return '未知录入类型'
+  },
+
+  async _handleIntakeExpense(intake) {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return '当前没有项目，无法录入。'
+    try {
+      const now = new Date().toISOString()
+      const data = {
+        amount: intake.amount,
+        type: intake.type || 'other',
+        pay_date: intake.pay_date || this._todayStr(),
+        stage_ids: intake.stage_ids || [],
+        stage_id: (intake.stage_ids && intake.stage_ids[0]) || '', // 旧读取端兼容
+        belong: '', // 非全屋定制归属
+        remark: intake.remark || '',
+        created_at: now,
+        updated_at: now,
+      }
+      const r = await write.insert('expenses', projectId, { ...data, version: 1, project_id: projectId, deleted: false })
+      if (r && r.error) return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
+      const typeName = { labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }[intake.type] || '其他'
+      const lines = [
+        '✅ 已录入花费：',
+        `· 金额：¥${(intake.amount / 100).toFixed(2)}（${typeName}）`,
+        intake.pay_date ? `· 支付日：${intake.pay_date}` : '',
+        (intake.stage_ids && intake.stage_ids.length) ? '· 已关联阶段' : '',
+        intake.remark ? `· 备注：${intake.remark}` : '',
+        '',
+        '💡 在「花费」页可查看与编辑。',
+      ].filter(Boolean)
+      return lines.join('\n')
+    } catch (e) {
+      return '录入失败：' + (e.errMsg || e.message || '未知错误')
+    }
+  },
+
+  async _handleIntakeDiary(intake) {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return '当前没有项目，无法录入。'
+    try {
+      const now = new Date().toISOString()
+      const data = {
+        title: intake.title,
+        content: intake.content,
+        diary_date: intake.diary_date || this._todayStr(),
+        room_ids: intake.room_ids || [],
+        room_id: (intake.room_ids && intake.room_ids[0]) || '', // 旧读取端兼容
+        stage_ids: intake.stage_ids || [],
+        stage_id: (intake.stage_ids && intake.stage_ids[0]) || '', // 旧读取端兼容
+      }
+      const r = await write.insert('diaries', projectId, {
+        ...data, version: 1, project_id: projectId, deleted: false,
+        created_at: now, updated_at: now,
+      })
+      if (r && r.error) return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
+      const lines = [
+        '✅ 已录入日记：',
+        `· 标题：${intake.title}`,
+        `· 日期：${intake.diary_date}`,
+        (intake.room_ids && intake.room_ids.length) ? '· 已关联房间' : '',
+        (intake.stage_ids && intake.stage_ids.length) ? '· 已关联阶段' : '',
+        '',
+        '💡 在「日记」页可查看与编辑。',
+      ].filter(Boolean)
+      return lines.join('\n')
+    } catch (e) {
+      return '录入失败：' + (e.errMsg || e.message || '未知错误')
+    }
+  },
+
+  // —— LLM 兜底提取：让云函数把自由文本转结构化 JSON 再落库 ——
+  async _llmExtract(intent, text) {
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'aiAssistant',
+        data: {
+          mode: 'extract',
+          collection: intent,
+          text,
+          rooms: (this.data.snapshot.rooms || []).map((r) => r.name),
+          stages: (this.data.snapshot.stages || []).map((s) => s.name),
+        },
+      })
+      const r = res && res.result
+      if (!r || !r.ok || !r.data) return null
+      return this._adaptLLMData(intent, r.data)
+    } catch (e) {
+      return null
+    }
+  },
+
+  // LLM 返回的 JSON（yuan + 名字）→ 写库就绪形状（fen + id）
+  _adaptLLMData(intent, raw) {
+    const rooms = this.data.snapshot.rooms || []
+    const stages = this.data.snapshot.stages || []
+    const nameToId = (names, list) => {
+      const ids = []
+      ;(names || []).forEach((nm) => {
+        const found = list.find((x) => String(x.name || '') === String(nm) || String(x.name || '').indexOf(String(nm)) !== -1)
+        if (found) ids.push(found.id)
+      })
+      return ids
+    }
+    if (intent === 'material') {
+      const qty = Number(raw.quantity || 0)
+      const up = Number(raw.unit_price_yuan || 0)
+      return { name: String(raw.name || '').trim(), quantity: qty, unit: String(raw.unit || '个'), unit_price: Math.round(up * 100), total_price: Math.round(up * 100 * qty), note: String(raw.note || '').trim(), original: '' }
+    }
+    if (intent === 'expense') {
+      const typeMap = { labor: 'labor', design: 'design', deposit: 'deposit', other: 'other' }
+      return {
+        amount: Math.round(Number(raw.amount_yuan || 0) * 100),
+        type: typeMap[String(raw.type || 'other')] || 'other',
+        pay_date: String(raw.pay_date || this._todayStr()),
+        stage_ids: nameToId(raw.stage_names, stages),
+        remark: String(raw.remark || '').trim(),
+      }
+    }
+    if (intent === 'diary') {
+      return {
+        title: String(raw.title || '日记').slice(0, 20),
+        content: String(raw.content || '').trim(),
+        diary_date: String(raw.diary_date || this._todayStr()),
+        room_ids: nameToId(raw.room_names, rooms),
+        stage_ids: nameToId(raw.stage_names, stages),
+      }
+    }
+    return null
+  },
+
+  _formatHint(intent) {
+    if (intent === 'material') return '没太看懂这条材料信息～试试：「录入材料清单，欧派木门三张，单价300一张」'
+    if (intent === 'expense') return '没太看懂这条花费信息～试试：「记一笔 人工 5000元 今天 水电改造」'
+    if (intent === 'diary') return '没太看懂这条日记信息～试试：「记日记 今天 客厅 水电验收完成，师傅说下周做防水」'
+    return '没看懂～'
+  },
+
+  // —— 多维分析：客户端真实聚合（基于 buildSnapshot 返回的原始数组）——
+  computeStats() {
+    const raw = this.data.raw || {}
+    const rooms = raw.rooms || []
+    const stages = raw.stages || []
+    const expenses = (raw.expenses || []).map((e) => ({
+      amount: Number(e.amount || 0),
+      type: e.type || 'other',
+      stage_ids: e.stage_ids || (e.stage_id ? [e.stage_id] : []),
+      pay_date: String(e.pay_date || ''),
+    }))
+    const materials = (raw.materials || []).map((m) => ({
+      name: m.name,
+      status: m.status || 'to_buy',
+      total: Number(m.total_price || 0),
+      planned: Number(m.planned_price != null ? m.planned_price : m.total_price || 0),
+      room_ids: m.room_ids || (m.room_id ? [m.room_id] : []),
+    }))
+    const typeName = { labor: '人工', design: '设计', deposit: '订金/定金', other: '其他', material: '材料' }
+    const ymNow = new Date().getFullYear() * 100 + (new Date().getMonth() + 1)
+
+    const byType = {}; let totalExp = 0, monthExp = 0
+    const monthly = {}
+    const byStageExpMap = {}
+    expenses.forEach((e) => {
+      totalExp += e.amount
+      const ymd = e.pay_date.slice(0, 7).replace('-', '')
+      const ym = ymd ? Number(ymd) : 0
+      if (ym && ym === ymNow) monthExp += e.amount
+      byType[e.type] = (byType[e.type] || 0) + e.amount
+      if (ym) monthly[ym] = (monthly[ym] || 0) + e.amount
+      ;(Array.isArray(e.stage_ids) ? e.stage_ids : [e.stage_ids]).forEach((sid) => { if (sid) byStageExpMap[sid] = (byStageExpMap[sid] || 0) + e.amount })
+    })
+    const stageName = (id) => { const s = stages.find((x) => x.id === id); return s ? s.name : id }
+    const stageExpList = Object.keys(byStageExpMap).map((id) => ({ name: stageName(id), total: byStageExpMap[id] })).sort((a, b) => b.total - a.total)
+
+    let planTotal = 0, boughtTotal = 0, tobuyTotal = 0, matCount = 0
+    const matByStatus = { to_buy: { count: 0, total: 0 }, bought: { count: 0, total: 0 }, on_site: { count: 0, total: 0 } }
+    const matByRoomMap = {}
+    materials.forEach((m) => {
+      matCount++
+      planTotal += m.planned
+      if (m.status === 'bought' || m.status === 'on_site') {
+        boughtTotal += m.total
+        matByStatus[m.status].count++; matByStatus[m.status].total += m.total
+      } else {
+        tobuyTotal += m.planned
+        matByStatus.to_buy.count++; matByStatus.to_buy.total += m.planned
+      }
+      ;(Array.isArray(m.room_ids) ? m.room_ids : [m.room_ids]).forEach((rid) => { if (rid) matByRoomMap[rid] = (matByRoomMap[rid] || 0) + m.total })
+    })
+    const roomName = (id) => { const r = rooms.find((x) => x.id === id); return r ? r.name : id }
+    const matByRoomList = Object.keys(matByRoomMap).map((id) => ({ name: roomName(id), total: matByRoomMap[id] })).sort((a, b) => b.total - a.total)
+
+    const stageCounts = { pending: 0, doing: 0, done: 0 }
+    stages.forEach((s) => { stageCounts[s.status || 'pending'] = (stageCounts[s.status || 'pending'] || 0) + 1 })
+    const doingStage = stages.find((s) => s.status === 'doing')
+
+    return {
+      totalExp, monthExp,
+      byType: Object.keys(byType).map((k) => ({ key: k, name: typeName[k] || k, total: byType[k] })).sort((a, b) => b.total - a.total),
+      monthly: Object.keys(monthly).sort().map((k) => ({ month: k, total: monthly[k] })),
+      stageExpList,
+      materials: { count: matCount, planned: planTotal, bought: boughtTotal, tobuy: tobuyTotal, byStatus: matByStatus, byRoom: matByRoomList },
+      stages: { counts: stageCounts, doing: doingStage ? doingStage.name : null, list: stages.map((s) => ({ name: s.name, status: s.status || 'pending' })) },
+    }
+  },
+
+  // —— 查询路由：正则识别常见问法，直接返回格式化统计文本（离线可用）——
+  _routeQuery(text, stats) {
+    const t = String(text || '')
+    const yuan = (fen) => Math.round(fen / 100).toLocaleString('zh-CN')
+    // 本月花费
+    if (/本月|这个月|当月|这月/.test(t) && /花|支出|用了|开销|花费/.test(t)) {
+      let s = '📊 本月花费：¥' + yuan(stats.monthExp) + ' 元（总支出 ¥' + yuan(stats.totalExp) + ' 元）\n'
+      if (stats.byType.length) s += '· 按类型：' + stats.byType.map((x) => x.name + ' ¥' + yuan(x.total)).join('；')
+      return s
+    }
+    // 各阶段进度
+    if (/进度|到哪|做到哪|进行中|已完成.*几|各阶段|阶段.*情况|目前.*阶段/.test(t)) {
+      const c = stats.stages.counts
+      let s = '📊 施工阶段（共 ' + stats.stages.list.length + ' 段）：未开始 ' + c.pending + ' / 进行中 ' + c.doing + ' / 已完成 ' + c.done + '\n'
+      if (stats.stages.doing) s += '· 当前进行中：' + stats.stages.doing + '\n'
+      s += stats.stages.list.map((x) => '· ' + x.name + '（' + ({ pending: '未开始', doing: '进行中', done: '已完成' }[x.status] || x.status) + '）').join('\n')
+      return s
+    }
+    // 待购清单
+    if (/待购|待买|待采购|还没买|没买/.test(t) && /材料|买|购/.test(t)) {
+      const tb = stats.materials.byStatus.to_buy
+      return '📊 待购材料：' + tb.count + ' 项，计划 ¥' + yuan(tb.total) + ' 元\n· 已购/进场合计：¥' + yuan(stats.materials.bought) + ' 元'
+    }
+    // 材料预算 vs 已花
+    if (/材料.*预算|材料.*花|材料.*钱|材料总|材料.*合计/.test(t)) {
+      const m = stats.materials
+      return '📊 材料：共 ' + m.count + ' 项\n· 计划总额：¥' + yuan(m.planned) + ' 元\n· 已购/进场：¥' + yuan(m.bought) + ' 元\n· 待购：¥' + yuan(m.tobuy) + ' 元'
+    }
+    // 按类型花费
+    if (/按类型|哪类|什么类|类目|花在|各类型/.test(t)) {
+      if (!stats.byType.length) return '📊 暂无花费记录。'
+      return '📊 按类目花费：\n' + stats.byType.map((x) => '· ' + x.name + '：¥' + yuan(x.total)).join('\n')
+    }
+    // 月度趋势
+    if (/趋势|每月|月花|月度|每个月|按月/.test(t)) {
+      if (!stats.monthly.length) return '📊 暂无可统计的月度花费数据。'
+      return '📊 月度花费趋势：\n' + stats.monthly.map((x) => '· ' + x.month + '：¥' + yuan(x.total)).join('\n')
+    }
+    // 指定阶段花费
+    const hitStage = stats.stages.list.find((x) => t.indexOf(x.name) !== -1)
+    if (hitStage && /花|支出|用了|多少钱|开销|费用/.test(t)) {
+      const item = stats.stageExpList.find((x) => x.name === hitStage.name)
+      return '📊 ' + hitStage.name + ' 阶段花费：' + (item ? '¥' + yuan(item.total) + ' 元' : '暂无关联花费记录')
+    }
+    return null
+  },
+
   async send(src) {
     const text = String(typeof src === 'string' ? src : this.data.input || '').trim()
     if (!text || this.data.loading) return
@@ -426,15 +793,23 @@ Page({
     }
 
     try {
-      // ★ 系统数据录入快捷指令（「录入材料：欧派木门 3 张 300/张」）
-      //   不走 LLM，直接正则解析 + write.insert('materials')，把结果作为 AI 回复气泡
-      //   让 LLM 不可用 / 未配置时也能录入；后续如要做日记/花费等再扩
+      // ★ 系统数据录入快捷指令（材料/日记/花费）：启发式解析 → write.insert，不走 LLM
+      //   未命中且 LLM 已配时走 LLM 兜底提取；让 LLM 不可用 / 未配置时也能录入
       if (projectId) {
-        const intake = this.tryParseIntakeMaterial(text)
-        if (intake) {
-          const reply = await this._handleIntakeMaterial(intake)
+        const intent = this.detectIntent(text)
+        if (intent) {
+          const reply = await this._handleEntry(intent, text)
           finish(reply)
           return
+        }
+        // 多维分析：正则识别常见问法 → 客户端真实聚合 → 格式化文本（离线可用）
+        if (this.data.raw) {
+          const stats = this.computeStats()
+          const quick = this._routeQuery(text, stats)
+          if (quick) {
+            finish(quick)
+            return
+          }
         }
       }
 

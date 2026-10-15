@@ -225,8 +225,95 @@ async function callLLM(context, question) {
   return txt ? String(txt).trim() : null
 }
 
+// —— 录入兜底提取：自由文本 → 结构化 JSON（启发式解析失败时客户端调用）——
+// 客户端传：{ mode:'extract', collection:'material'|'expense'|'diary', text, rooms:[name...], stages:[name...] }
+// 返回：{ ok:true, data:{...} } 或 { ok:false, reason:'not_configured'|'unknown_collection'|'call_failed'|'empty_reply'|'parse_error', error? }
+const EXTRACT_SCHEMA = {
+  material: {
+    desc: 'name(字符串,材料名), quantity(数字,数量), unit(字符串,单位如 张/个/桶/平方), unit_price_yuan(数字,单价元,无法推断填0), note(字符串,备注/要求可空)',
+    example: '{"name":"欧派木门","quantity":3,"unit":"张","unit_price_yuan":300,"note":"本周日上门安装"}',
+  },
+  expense: {
+    desc: 'amount_yuan(数字,金额元), type(枚举: labor人工/design设计/deposit订金定金/other其他), pay_date(YYYY-MM-DD,无法确定用今天), stage_names(字符串数组,从给定阶段名里挑,可空), remark(字符串,可空)',
+    example: '{"amount_yuan":5000,"type":"labor","pay_date":"2026-10-15","stage_names":["水电改造"],"remark":"泥工师傅工钱"}',
+  },
+  diary: {
+    desc: 'title(字符串,标题≤20字), content(字符串,正文), diary_date(YYYY-MM-DD,无法确定用今天), room_names(字符串数组,从给定房间名里挑,可空), stage_names(字符串数组,从给定阶段名里挑,可空)',
+    example: '{"title":"水电验收","content":"今日水电验收完成，师傅说下周做防水","diary_date":"2026-10-15","room_names":["客厅"],"stage_names":["水电改造"]}',
+  },
+}
+
+async function extractStructured(event) {
+  const cfg = await getLLMConfig()
+  if (!cfg) return { ok: false, reason: 'not_configured' }
+  const coll = event.collection === 'diary' ? 'diary' : event.collection === 'expense' ? 'expense' : 'material'
+  const schema = EXTRACT_SCHEMA[coll]
+  if (!schema) return { ok: false, reason: 'unknown_collection' }
+  const knownRooms = Array.isArray(event.rooms) ? event.rooms : []
+  const knownStages = Array.isArray(event.stages) ? event.stages : []
+  const prompt = [
+    '你是装修项目的结构化数据提取器。从用户输入的自由文本里，提取出要录入「' + coll + '」字段的 JSON。',
+    '',
+    '字段定义（' + coll + '）：',
+    schema.desc,
+    '',
+    '示例输出：',
+    schema.example,
+    '',
+    '已知房间名（room_names 只能从这里挑，没有匹配就留空数组）：' + (knownRooms.length ? knownRooms.join('、') : '（无）'),
+    '已知阶段名（stage_names 只能从这里挑，没有匹配就留空数组）：' + (knownStages.length ? knownStages.join('、') : '（无）'),
+    '',
+    '要求：',
+    '- 只输出一个 JSON 对象，不要解释、不要用 markdown 代码块包裹；',
+    '- 金额字段是「元」（不是分）；日期格式 YYYY-MM-DD；',
+    '- 无法推断的字段填 0 / 空字符串 / 空数组，不要编造；',
+    '- 严格匹配上面示例的字段名。',
+    '',
+    '用户输入：' + (event.text || ''),
+  ].join('\n')
+
+  let j
+  try {
+    j = await httpJson({
+      method: 'POST',
+      url: cfg.base,
+      headers: { Authorization: 'Bearer ' + cfg.key },
+      body: {
+        model: cfg.model,
+        messages: [
+          { role: 'system', content: '你只输出结构化 JSON，不解释。' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        max_tokens: 600,
+        stream: false,
+      },
+    })
+  } catch (e) {
+    return { ok: false, reason: 'call_failed', error: String((e && e.message) || e) }
+  }
+  const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content
+  if (!txt) return { ok: false, reason: 'empty_reply' }
+  // 去 markdown 代码块包裹 + 取首个 { 到末个 } 之间，拦截模型额外废话
+  let raw = String(txt).trim()
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fence) raw = fence[1].trim()
+  const s = raw.indexOf('{'); const e = raw.lastIndexOf('}')
+  if (s !== -1 && e !== -1 && e > s) raw = raw.slice(s, e + 1)
+  try {
+    const data = JSON.parse(raw)
+    return { ok: true, data }
+  } catch (err) {
+    return { ok: false, reason: 'parse_error', error: String(raw).slice(0, 200) }
+  }
+}
+
 exports.main = async (event) => {
   const { question } = event || {}
+  // —— 录入兜底提取模式：自由文本 → 结构化 JSON（启发式解析失败时客户端调用）——
+  if (event && event.mode === 'extract') {
+    return await extractStructured(event)
+  }
   const q = String(question || '').trim()
   if (!q) return { ok: false, message: '请输入要问的问题' }
   const wxContext = cloud.getWXContext()
