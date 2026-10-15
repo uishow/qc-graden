@@ -7,12 +7,13 @@
         <view class="muted snap-toggle" bindtap="toggleSnap">{{snapCollapsed ? '展开 ▾' : '收起 ▴'}}</view>
       </view>
       <view wx:if="{{snapReady}}">
-        <view class="snap-line"><text class="snap-k">项目：</text>{{snapshot.projectName || '—'}}</view>
-        <view class="snap-line"><text class="snap-k">阶段：</text>{{snapshot.stagesText || '尚未设置'}}</view>
+        <!-- 展示字段在 snapshotView（snapshot 是发给云函数的、只有 name 没有统计文本），此前误读 snapshot.* 导致恒显示「尚未设置」 -->
+        <view class="snap-line"><text class="snap-k">项目：</text>{{snapshotView.projectName || '—'}}</view>
+        <view class="snap-line"><text class="snap-k">阶段：</text>{{snapshotView.stagesText || '尚未设置'}}</view>
         <view wx:if="{{!snapCollapsed}}">
-          <view class="snap-line"><text class="snap-k">已花费：</text>{{snapshot.spentText}} <text class="snap-k">本月：</text>{{snapshot.monthText}}</view>
-          <view class="snap-line"><text class="snap-k">材料：</text>{{snapshot.materialsText}}</view>
-          <view class="snap-line"><text class="snap-k">房间：</text>{{snapshot.roomsText}} <text class="snap-k">日记：</text>{{snapshot.diariesText}}</view>
+          <view class="snap-line"><text class="snap-k">已花费：</text>{{snapshotView.spentText}} <text class="snap-k">本月：</text>{{snapshotView.monthText}}</view>
+          <view class="snap-line"><text class="snap-k">材料：</text>{{snapshotView.materialsText}}</view>
+          <view class="snap-line"><text class="snap-k">房间：</text>{{snapshotView.roomsText}} <text class="snap-k">日记：</text>{{snapshotView.diariesText}}</view>
         </view>
       </view>
       <view wx:else class="muted" style="margin-top:8rpx">正在加载项目数据…</view>
@@ -47,6 +48,7 @@
           </view>
           <view class="entry-actions">
             <view class="entry-btn entry-cancel" bindtap="cancelEntry">取消</view>
+            <view class="entry-btn entry-edit" bindtap="openEntryForm">修改</view>
             <view class="entry-btn entry-ok" bindtap="confirmEntry">确认写入</view>
           </view>
         </view>
@@ -95,5 +97,132 @@
       bindinput="onInput"
     />
     <view class="send-btn {{loading || !input ? 'send-disabled' : ''}}" bindtap="send">发送</view>
+  </view>
+
+  <!-- Phase 3：引导式半屏编辑表单（从预览卡点「修改」进入，预填解析结果，可改后落库） -->
+  <view wx:if="{{formOpen}}" class="mask" bindtap="closeEntryForm" catchtouchmove="noop">
+    <view class="sheet" style="margin-bottom:{{kbHeight}}px" catchtap="noop">
+      <view class="sheet-head">
+        <text class="sheet-title">{{formKind === 'material' ? '修改材料' : (formKind === 'expense' ? '修改花费' : '修改日记')}}</text>
+        <text class="sheet-close" bindtap="closeEntryForm">✕</text>
+      </view>
+
+      <view class="sheet-body">
+        <!-- 材料 -->
+        <block wx:if="{{formKind === 'material'}}">
+          <view class="form-block">
+            <view class="form-label">材料名称 <text class="req">*</text></view>
+            <input class="form-input" value="{{form.name}}" placeholder="如：木门" data-field="name" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view class="form-block">
+            <view class="form-label">品牌</view>
+            <input class="form-input" value="{{form.brand}}" placeholder="如：欧派（可留空）" data-field="brand" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view class="form-row">
+            <view class="form-block form-flex">
+              <view class="form-label">数量</view>
+              <input class="form-input" type="digit" value="{{form.quantity}}" placeholder="1" data-field="quantity" bindinput="onFormInput" adjust-position="{{false}}" />
+            </view>
+            <view class="form-block form-flex">
+              <view class="form-label">单位</view>
+              <input class="form-input" value="{{form.unit}}" placeholder="张/个/桶/平方" data-field="unit" bindinput="onFormInput" adjust-position="{{false}}" />
+            </view>
+          </view>
+          <view class="form-block">
+            <view class="form-label">单价（元）</view>
+            <input class="form-input" type="digit" value="{{form.unitPriceYuan}}" placeholder="如：300" data-field="unitPriceYuan" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view class="form-block">
+            <view class="form-label">备注 / 要求</view>
+            <textarea class="form-input form-textarea" value="{{form.note}}" placeholder="如：本周日上门安装" maxlength="{{500}}" data-field="note" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+        </block>
+
+        <!-- 花费 -->
+        <block wx:if="{{formKind === 'expense'}}">
+          <view class="form-block">
+            <view class="form-label">金额（元）<text class="req">*</text></view>
+            <input class="form-input" type="digit" value="{{form.amountYuan}}" placeholder="如：5000" data-field="amountYuan" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view class="form-block">
+            <view class="form-label">类别</view>
+            <view class="form-chips">
+              <view
+                wx:for="{{typeOptions}}"
+                wx:key="index"
+                class="form-chip {{form.typeIndex === index ? 'on' : ''}}"
+                data-idx="{{index}}"
+                bindtap="onFormTypePick"
+              >{{item}}</view>
+            </view>
+          </view>
+          <view class="form-block">
+            <view class="form-label">支付日期</view>
+            <input class="form-input" value="{{form.payDate}}" placeholder="YYYY-MM-DD" data-field="payDate" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view wx:if="{{raw.stages.length}}" class="form-block">
+            <view class="form-label">关联阶段（可多选）</view>
+            <view class="form-chips">
+              <view
+                wx:for="{{raw.stages}}"
+                wx:key="id"
+                class="form-chip {{form.stageSet.indexOf(item.id) >= 0 ? 'on' : ''}}"
+                data-id="{{item.id}}"
+                bindtap="toggleFormStage"
+              >{{item.name}}</view>
+            </view>
+          </view>
+          <view class="form-block">
+            <view class="form-label">备注 / 事由</view>
+            <input class="form-input" value="{{form.remark}}" placeholder="如：泥工师傅工钱" data-field="remark" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+        </block>
+
+        <!-- 日记 -->
+        <block wx:if="{{formKind === 'diary'}}">
+          <view class="form-block">
+            <view class="form-label">标题</view>
+            <input class="form-input" value="{{form.title}}" placeholder="如：水电验收（≤20字）" data-field="title" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view class="form-block">
+            <view class="form-label">正文<text class="req">*</text></view>
+            <textarea class="form-input form-textarea" value="{{form.content}}" placeholder="今天现场发生了什么…" maxlength="{{1000}}" data-field="content" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view class="form-block">
+            <view class="form-label">日期</view>
+            <input class="form-input" value="{{form.diaryDate}}" placeholder="YYYY-MM-DD" data-field="diaryDate" bindinput="onFormInput" adjust-position="{{false}}" />
+          </view>
+          <view wx:if="{{raw.rooms.length}}" class="form-block">
+            <view class="form-label">关联房间（可多选）</view>
+            <view class="form-chips">
+              <view
+                wx:for="{{raw.rooms}}"
+                wx:key="id"
+                class="form-chip {{form.roomSet.indexOf(item.id) >= 0 ? 'on' : ''}}"
+                data-id="{{item.id}}"
+                bindtap="toggleFormRoom"
+              >{{item.name}}</view>
+            </view>
+          </view>
+          <view wx:if="{{raw.stages.length}}" class="form-block">
+            <view class="form-label">关联阶段（可多选）</view>
+            <view class="form-chips">
+              <view
+                wx:for="{{raw.stages}}"
+                wx:key="id"
+                class="form-chip {{form.stageSet.indexOf(item.id) >= 0 ? 'on' : ''}}"
+                data-id="{{item.id}}"
+                bindtap="toggleFormStage"
+              >{{item.name}}</view>
+            </view>
+          </view>
+        </block>
+      </view>
+
+      <view class="sheet-foot">
+        <view class="entry-btn entry-cancel" bindtap="closeEntryForm">取消</view>
+        <view class="entry-btn entry-ok" bindtap="confirmFromForm">确认写入</view>
+      </view>
+    </view>
   </view>
 </view>

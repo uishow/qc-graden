@@ -119,6 +119,90 @@
 }
 .entry-ok:active { opacity: 0.85; }
 .entry-cancel:active { opacity: 0.85; }
+/* 预览卡「修改」按钮：次强调，介于取消与确认之间 */
+.entry-edit {
+  background: var(--c-secondary-bg);
+  color: var(--c-primary);
+  border: 1rpx solid var(--c-primary);
+}
+.entry-edit:active { opacity: 0.85; }
+
+/* —— Phase 3：引导式半屏编辑表单 ——
+   .mask 显式四向归零钉底 + flex column end；.sheet flex column，
+   .sheet-body flex:1 + min-height:0 + overflow-y:auto（缺 min-height:0 会把 foot 顶出裁切） */
+.mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 99999; /* 需高于自定义 tabBar 的框架包装层 */
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.sheet {
+  width: 100%;
+  max-height: 78vh;
+  background: var(--c-card);
+  border-radius: 24rpx 24rpx 0 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 0 0 calc(16rpx + env(safe-area-inset-bottom));
+}
+.sheet-head {
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24rpx 28rpx 16rpx;
+  border-bottom: 1rpx solid var(--c-card-border);
+}
+.sheet-title { font-size: 30rpx; font-weight: 600; color: var(--c-text); }
+.sheet-close { font-size: 30rpx; color: var(--c-text-2); padding: 0 6rpx; }
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8rpx 28rpx 16rpx;
+  box-sizing: border-box;
+}
+.sheet-foot {
+  flex-shrink: 0;
+  display: flex; gap: 16rpx;
+  padding: 16rpx 28rpx 0;
+  border-top: 1rpx solid var(--c-card-border);
+}
+
+/* 表单控件 */
+.form-block { margin-top: 20rpx; }
+.form-row { display: flex; gap: 16rpx; }
+.form-flex { flex: 1; min-width: 0; }
+.form-label { font-size: 25rpx; color: var(--c-text-2); margin-bottom: 10rpx; }
+.req { color: #e5484d; }
+.form-input {
+  background: var(--c-secondary-bg);
+  border: 1rpx solid var(--c-card-border);
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  font-size: 28rpx;
+  color: var(--c-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+.form-textarea { min-height: 120rpx; line-height: 1.6; }
+.form-chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.form-chip {
+  font-size: 25rpx;
+  padding: 12rpx 22rpx;
+  border-radius: 999rpx;
+  background: var(--c-secondary-bg);
+  color: var(--c-text-2);
+  border: 1rpx solid var(--c-card-border);
+}
+.form-chip.on {
+  background: var(--c-primary);
+  color: #ffffff;
+  border-color: var(--c-primary);
+}
+.form-chip:active { opacity: 0.8; }
 
 .typing { white-space: normal; display: flex; align-items: center; padding: 20rpx 24rpx; }
 .dot { font-size: 24rpx; margin: 0 5rpx; color: var(--c-text-2); animation: dot-blink 1.2s infinite; }

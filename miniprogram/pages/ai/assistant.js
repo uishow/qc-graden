@@ -277,10 +277,18 @@ Page({
     kbHeight: 0,
     snapCollapsed: false,
     snapReady: false,
-    snapshot: {}, // 发往云函数的
+    snapshot: {}, // 发往云函数的（只有 name，无 id，供 LLM 用）
     snapshotView: {}, // 顶部卡显示
+    // raw 由 refreshSnapshot 整体覆盖（含 expenses/materials/stages/rooms 原始数组，带 id）。
+    // 这里只给 stages/rooms 一个安全默认值，供半屏表单的多选 chips 渲染（避免未加载时 wxml 取空报错）
+    raw: { stages: [], rooms: [] },
     firstRoom: '',
     pending: null, // 待确认的录入预览 { kind, parsed, rows }
+    // —— Phase 3：引导式半屏编辑表单（从预览卡点「修改」进入，预填解析结果，可改后落库）——
+    formOpen: false,
+    formKind: '',
+    form: {}, // 可编辑副本 { name, brand, quantity, unit, unitPriceYuan, note, amountYuan, typeIndex, remark, payDate, title, content, diaryDate, stage_ids, room_ids }
+    typeOptions: ['人工', '设计', '订金/定金', '其他', '材料'],
   },
 
   onLoad() {
@@ -509,8 +517,14 @@ Page({
     return new RegExp('(\\d+|一|二|两|三|四|五|六|七|八|九|十)\\s*(' + unitList + ')').test(text)
   },
 
-  _matchStageIds(text) { return matchNameIds(text, this.data.snapshot.stages || [], 'name') },
-  _matchRoomIds(text) { return matchNameIds(text, this.data.snapshot.rooms || [], 'name') },
+  // 名字→id 必须用 raw（带 id 的原始数组）：snapshot 里的 stages/rooms 只有 name 没有 id，
+  // 用它匹配会得到 undefined id，录入的阶段/房间关联就丢了
+  _matchStageIds(text) { return matchNameIds(text, this.data.raw.stages || [], 'name') },
+  _matchRoomIds(text) { return matchNameIds(text, this.data.raw.rooms || [], 'name') },
+  // 纯名字列表（与 id 映射同源，都取 raw）。不在此处过滤长度：
+  // 剥词场景自行过滤 length>=2，而发给 LLM 的「已知名」要保留全部（含「厅」这类单字名）
+  _knownStageNames() { return (this.data.raw.stages || []).map((s) => String(s.name || '').trim()).filter(Boolean) },
+  _knownRoomNames() { return (this.data.raw.rooms || []).map((r) => String(r.name || '').trim()).filter(Boolean) },
 
   // —— 意图识别：材料 / 花费 / 日记 / null（非录入）——
   detectIntent(text) {
@@ -576,8 +590,8 @@ Page({
       remark = remark.replace(/(备注|说明|事由|类型|类别)\s*(?:是|[:：])?/g, ' ')
       remark = remark.replace(/(人工|工钱|工人|师傅|设计|订金|定金|预付款|花费|支出|付款|付了|报销|开支|消费|记一笔|记一下|花)/g, ' ')
       remark = remark.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
-      ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
-      ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
+      this._knownStageNames().filter((n) => n.length >= 2).forEach((n) => { remark = remark.split(n).join(' ') })
+      this._knownRoomNames().filter((n) => n.length >= 2).forEach((n) => { remark = remark.split(n).join(' ') })
       remark = remark.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
     }
     return { amount: amountFen, type, pay_date: payDate, stage_ids: stageIds, remark, original: text.trim() }
@@ -593,8 +607,8 @@ Page({
     body = body.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
     // 已知房间/阶段名仅当剥离后正文仍有内容时才移除，避免正文被掏空导致解析失败
     let stripped = body
-    ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) stripped = stripped.split(n).join(' ') })
-    ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) stripped = stripped.split(n).join(' ') })
+    this._knownStageNames().filter((n) => n.length >= 2).forEach((n) => { stripped = stripped.split(n).join(' ') })
+    this._knownRoomNames().filter((n) => n.length >= 2).forEach((n) => { stripped = stripped.split(n).join(' ') })
     stripped = stripped.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
     let content = stripped
     if (content.length < 4) {
@@ -615,11 +629,29 @@ Page({
     return null
   },
 
+  // 启发式解析结果是否「置信度不足」，需要 LLM 兜底补全。
+  // 目标：干净输入走正则（即时/离线），含糊输入交给 LLM，避免「解析一般」的观感。
+  _needsLLM(intent, parsed, text) {
+    if (!parsed) return true
+    const t = String(text || '')
+    if (intent === 'material') {
+      // 名字疑似把整句吞进来了（没拆出数量/单位），或正文声明了品牌却没抽到
+      if (parsed.name && parsed.name.length >= 12) return true
+      if (/品牌|牌子|商标/.test(t) && !parsed.brand) return true
+    } else if (intent === 'diary') {
+      // 整段被当成正文、几乎没拆出房间/阶段/日期线索（说明启发式没命中已知名）
+      const clue = /(房间|卧室|主卧|次卧|客厅|厨房|卫生间|卫浴|阳台|书房|阶段|水电|泥木|油漆|竣工|验收)/.test(t)
+      if (clue && parsed.content && parsed.content.length >= t.trim().length * 0.9) return true
+    }
+    return false
+  },
+
   // 把解析结果转成预览卡片的「字段行」
   _entryRows(kind, p) {
     const yuan = (fen) => (Number(fen || 0) / 100).toFixed(2)
-    const roomMap = {}; (this.data.snapshot.rooms || []).forEach((r) => { roomMap[r.id] = r.name })
-    const stageMap = {}; (this.data.snapshot.stages || []).forEach((s) => { stageMap[s.id] = s.name })
+    // id→name 映射用 raw（带 id）；用 snapshot 会因无 id 导致 key 全是 undefined、预览卡显示不出房间/阶段名
+    const roomMap = {}; (this.data.raw.rooms || []).forEach((r) => { roomMap[r.id] = r.name })
+    const stageMap = {}; (this.data.raw.stages || []).forEach((s) => { stageMap[s.id] = s.name })
     const names = (ids) => (ids || []).map((id) => roomMap[id] || stageMap[id] || id).join('、') || '—'
     if (kind === 'material') {
       return [
@@ -681,6 +713,126 @@ Page({
     if (!this.data.pending) return
     this.setData({ pending: null })
     this._appendMessage({ role: 'ai', text: '已取消本次录入。' })
+  },
+
+  // —— Phase 3：从预览卡进入半屏编辑表单，预填解析结果 ——
+  openEntryForm() {
+    const entry = this.data.pending
+    if (!entry) return
+    const p = entry.parsed || {}
+    const typeIndex = this.data.typeOptions.findIndex((label, i) => {
+      const map = { 人工: 'labor', 设计: 'design', '订金/定金': 'deposit', 其他: 'other', 材料: 'material' }
+      return map[label] === (p.type || 'other')
+    })
+    const form = {
+      name: p.name || '',
+      brand: p.brand || '',
+      quantity: p.quantity != null ? String(p.quantity) : '',
+      unit: p.unit || '个',
+      unitPriceYuan: p.unit_price != null ? (Number(p.unit_price) / 100).toFixed(2) : '',
+      note: p.note || '',
+      amountYuan: p.amount != null ? (Number(p.amount) / 100).toFixed(2) : '',
+      typeIndex: typeIndex >= 0 ? typeIndex : 3,
+      remark: p.remark || '',
+      payDate: p.pay_date || this._todayStr(),
+      title: p.title || '',
+      content: p.content || '',
+      diaryDate: p.diary_date || this._todayStr(),
+      stage_ids: (p.stage_ids || []).slice(),
+      room_ids: (p.room_ids || []).slice(),
+      // 多选选中态用逗号拼接字符串，便于 wxml 里字符串 indexOf 判定高亮（数组 indexOf 在 wxml 不可靠）
+      stageSet: (p.stage_ids || []).join(','),
+      roomSet: (p.room_ids || []).join(','),
+    }
+    this.setData({ formOpen: true, formKind: entry.kind, form })
+    this.setBarHidden(true)
+  },
+
+  // 关闭半屏表单（不写入）
+  closeEntryForm() {
+    if (!this.data.formOpen) return
+    this.setData({ formOpen: false })
+    this.setBarHidden(false)
+  },
+
+  // 表单字段输入绑定（data-field 指定字段名）
+  onFormInput(e) {
+    const field = e.currentTarget.dataset.field
+    if (!field) return
+    const form = Object.assign({}, this.data.form)
+    form[field] = e.detail.value
+    this.setData({ form })
+  },
+
+  // 花费类别切换
+  onFormTypePick(e) {
+    const idx = Number(e.currentTarget.dataset.idx)
+    if (Number.isNaN(idx)) return
+    this.setData({ ['form.typeIndex']: idx })
+  },
+
+  // 阶段/房间多选切换（用于关联）
+  toggleFormStage(e) {
+    const id = e.currentTarget.dataset.id
+    const ids = this.data.form.stage_ids || []
+    const next = ids.indexOf(id) >= 0 ? ids.filter((x) => x !== id) : ids.concat([id])
+    this.setData({ ['form.stage_ids']: next, ['form.stageSet']: next.join(',') })
+  },
+  toggleFormRoom(e) {
+    const id = e.currentTarget.dataset.id
+    const ids = this.data.form.room_ids || []
+    const next = ids.indexOf(id) >= 0 ? ids.filter((x) => x !== id) : ids.concat([id])
+    this.setData({ ['form.room_ids']: next, ['form.roomSet']: next.join(',') })
+  },
+
+  // 从表单重建结构化对象（元→分、类别索引→枚举），覆盖 pending.parsed 后走原写入链路
+  _buildFromForm(kind, form) {
+    if (kind === 'material') {
+      const qty = Number(form.quantity || 0)
+      const upFen = Math.round(Number(form.unitPriceYuan || 0) * 100)
+      return {
+        name: String(form.name || '').trim(),
+        brand: String(form.brand || '').trim(),
+        quantity: qty > 0 ? qty : 1,
+        unit: String(form.unit || '个').trim() || '个',
+        unit_price: upFen,
+        total_price: upFen * (qty > 0 ? qty : 1),
+        note: String(form.note || '').trim(),
+        original: '',
+      }
+    }
+    if (kind === 'expense') {
+      const typeMap = ['labor', 'design', 'deposit', 'other', 'material']
+      return {
+        amount: Math.round(Number(form.amountYuan || 0) * 100),
+        type: typeMap[Number(form.typeIndex) || 3] || 'other',
+        pay_date: String(form.payDate || this._todayStr()),
+        stage_ids: (form.stage_ids || []).slice(),
+        remark: String(form.remark || '').trim(),
+        original: '',
+      }
+    }
+    return {
+      title: String(form.title || '').trim().slice(0, 20) || '日记',
+      content: String(form.content || '').trim(),
+      diary_date: String(form.diaryDate || this._todayStr()),
+      room_ids: (form.room_ids || []).slice(),
+      stage_ids: (form.stage_ids || []).slice(),
+      original: '',
+    }
+  },
+
+  // 半屏表单「确认写入」：用表单数据覆盖解析结果，再走 confirmEntry 落库 + 跳转
+  confirmFromForm() {
+    const { formKind, form } = this.data
+    if (!formKind) return
+    const built = this._buildFromForm(formKind, form)
+    if (formKind === 'material' && !built.name) { wx.showToast({ title: '请填写材料名称', icon: 'none' }); return }
+    if (formKind === 'expense' && !built.amount) { wx.showToast({ title: '请填写金额', icon: 'none' }); return }
+    if (formKind === 'diary' && !built.content) { wx.showToast({ title: '请填写日记内容', icon: 'none' }); return }
+    this.setData({ formOpen: false, pending: { kind: formKind, parsed: built, rows: this._entryRows(formKind, built) } })
+    this.setBarHidden(false)
+    return this.confirmEntry() // 返回 promise，便于调用方/测试等待落库完成
   },
 
   async _writeEntry(intent, data) {
@@ -769,8 +921,8 @@ Page({
           mode: 'extract',
           collection: intent,
           text,
-          rooms: (this.data.snapshot.rooms || []).map((r) => r.name),
-          stages: (this.data.snapshot.stages || []).map((s) => s.name),
+          rooms: this._knownRoomNames(),
+          stages: this._knownStageNames(),
         },
       })
       const r = res && res.result
@@ -783,8 +935,10 @@ Page({
 
   // LLM 返回的 JSON（yuan + 名字）→ 写库就绪形状（fen + id）
   _adaptLLMData(intent, raw) {
-    const rooms = this.data.snapshot.rooms || []
-    const stages = this.data.snapshot.stages || []
+    // 必须用 raw（带 id 的原始数组）：snapshot.rooms/stages 是发给 LLM 的精简版，只有 name 没有 id，
+    // 用它做名字→id 映射会得到 undefined id，导致阶段/房间关联写不进去
+    const rooms = this.data.raw.rooms || []
+    const stages = this.data.raw.stages || []
     const nameToId = (names, list) => {
       const ids = []
       ;(names || []).forEach((nm) => {
@@ -794,27 +948,44 @@ Page({
       return ids
     }
     if (intent === 'material') {
-      const qty = Number(raw.quantity || 0)
-      const up = Number(raw.unit_price_yuan || 0)
-      return { name: String(raw.name || '').trim(), quantity: qty, unit: String(raw.unit || '个'), unit_price: Math.round(up * 100), total_price: Math.round(up * 100 * qty), note: String(raw.note || '').trim(), original: '' }
+      const name = String(raw.name || '').trim()
+      if (!name) return null // 品牌/数量可缺省，但材料名必填
+      const qty = Number(raw.quantity || 0) > 0 ? Number(raw.quantity) : 1
+      const up = Number(raw.unit_price_yuan || 0) || 0
+      return {
+        name,
+        brand: String(raw.brand || '').trim(),
+        quantity: qty,
+        unit: String(raw.unit || '个').trim() || '个',
+        unit_price: Math.round(up * 100),
+        total_price: Math.round(up * 100 * qty),
+        note: String(raw.note || '').trim(),
+        original: '',
+      }
     }
     if (intent === 'expense') {
-      const typeMap = { labor: 'labor', design: 'design', deposit: 'deposit', other: 'other' }
+      const amountFen = Math.round(Number(raw.amount_yuan || 0) * 100)
+      if (!amountFen) return null // 金额必填
+      const typeMap = { labor: 'labor', design: 'design', deposit: 'deposit', other: 'other', material: 'material' }
       return {
-        amount: Math.round(Number(raw.amount_yuan || 0) * 100),
+        amount: amountFen,
         type: typeMap[String(raw.type || 'other')] || 'other',
         pay_date: String(raw.pay_date || this._todayStr()),
         stage_ids: nameToId(raw.stage_names, stages),
         remark: String(raw.remark || '').trim(),
+        original: '',
       }
     }
     if (intent === 'diary') {
+      const content = String(raw.content || '').trim()
+      const title = String(raw.title || '').trim() || (content.slice(0, 20) || '日记')
       return {
-        title: String(raw.title || '日记').slice(0, 20),
-        content: String(raw.content || '').trim(),
+        title: title.slice(0, 20),
+        content,
         diary_date: String(raw.diary_date || this._todayStr()),
         room_ids: nameToId(raw.room_names, rooms),
         stage_ids: nameToId(raw.stage_names, stages),
+        original: '',
       }
     }
     return null
@@ -1022,6 +1193,15 @@ Page({
     }, 900) // 留 0.9s 让用户看到 ✅ 回执再跳
   },
 
+  // 弹窗/半屏表单打开期间隐藏自定义 tabBar（其层级高于页面 fixed 弹窗，会盖住底部按钮）
+  setBarHidden(hidden) {
+    const bar = this.getTabBar && this.getTabBar()
+    if (bar) bar.setData({ hidden: !!hidden })
+  },
+
+  // 空处理器：用于拦截半屏表单内部的 tap / 滚动冒泡（避免点表单内部误关弹窗）
+  noop() {},
+
   async send(src) {
     const text = String(typeof src === 'string' ? src : this.data.input || '').trim()
     if (!text || this.data.loading) return
@@ -1061,8 +1241,12 @@ Page({
         }
         const intent = this.detectIntent(text)
         if (intent) {
-          // 先解析（启发式优先，失败走 LLM 兜底）；解析成功后弹预览卡，确认才落库
-          const parsed = this._tryParse(intent, text) || (await this._llmExtract(intent, text))
+          // 启发式优先（即时/离线）；结果置信度不足时再让 LLM 兜底补全
+          let parsed = this._tryParse(intent, text)
+          if (this._needsLLM(intent, parsed, text)) {
+            const llm = await this._llmExtract(intent, text)
+            if (llm) parsed = llm
+          }
           if (parsed) { this._showEntryPreview(intent, parsed); return }
           finish(this._formatHint(intent))
           return
