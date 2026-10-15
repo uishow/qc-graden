@@ -34,9 +34,10 @@
         <view wx:if="{{item.scope === 'member'}}" class="tag tag-accent">成员导入</view>
       </view>
       <view class="muted" style="margin-top:6rpx">{{item.summary}}</view>
-      <view style="margin-top:10rpx">
+      <view style="margin-top:10rpx;display:flex;align-items:center;flex-wrap:wrap">
         <text wx:for="{{item.tags}}" wx:key="*this" class="tag">{{item}}</text>
-        <text class="muted" style="float:right">阅读 {{item.view_count}}</text>
+        <text wx:if="{{item.scope === 'member' && item.contributorNick}}" class="muted" style="margin-left:12rpx;font-size:22rpx">由 {{item.contributorNick}} 贡献</text>
+        <text class="muted" style="margin-left:auto;font-size:22rpx">阅读 {{item.view_count}}</text>
       </view>
     </view>
   </block>

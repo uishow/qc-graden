@@ -7,6 +7,7 @@ Page({
     article: null,
     scope: '',
     metaText: '', // 来源 · 日期 · 阅读
+    contributorNick: '', // 成员导入文章的贡献者昵称（profiles.nick_name），没设就不显示
     needsEnrich: false, // 缺摘要/正文，可手动「补充内容与摘要」
     enriching: false,
     lines: [],
@@ -65,7 +66,17 @@ Page({
     bits.push('阅读 ' + (article.view_count || 0))
     const metaText = bits.join(' · ')
 
-    this.setData({ article, scope: article.scope || '', lines, imageUrls, metaText })
+    // 成员导入文章的贡献者昵称（openid → profiles.nick_name）；查不到就空，wxml 不渲染该行
+    let contributorNick = ''
+    if (article.contributor_id) {
+      try {
+        const { data: p } = await cloud.database
+          .from('profiles').select('owner_id,nick_name').eq('owner_id', article.contributor_id).limit(1)
+        contributorNick = (p && p[0] && p[0].nick_name) || ''
+      } catch (e) { /* 缺 profiles 表读权限等不影响详情展示 */ }
+    }
+
+    this.setData({ article, scope: article.scope || '', lines, imageUrls, metaText, contributorNick })
     // 缺摘要或正文（ima 链接类老文章）→ 允许手动补充
     const needsEnrich = (article.source === 'ima' || article.scope === 'member') &&
       (!article.summary || !(article.content || '').trim())

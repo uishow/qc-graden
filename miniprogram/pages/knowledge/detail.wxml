@@ -1,6 +1,8 @@
 <view class="page-root {{theme}}" wx:if="{{article}}">
   <view class="title-serif">{{article.title}}</view>
   <view class="muted" style="margin:12rpx 0 24rpx">{{metaText}}</view>
+  <!-- 成员导入文章：metaText 下方单独立一行「由 [昵称] 贡献」；没设昵称时不显示 -->
+  <view wx:if="{{article.scope === 'member' && contributorNick}}" class="muted" style="margin:-12rpx 0 16rpx;font-size:24rpx">由 {{contributorNick}} 贡献</view>
 
   <!-- 摘要：AI 自动生成或导入时填写（旧文章可能没有，则不显示） -->
   <view wx:if="{{article.summary}}" class="summary-box">

@@ -224,7 +224,7 @@ Page({
     const base = () => {
       let q = cloud.database
         .from('knowledge_articles')
-        .select('id,title,summary,tags,scope,view_count,category_id,project_id,contributor_id')
+        .select('id,title,summary,tags,scope,view_count,category_id,project_id,contributor_id,created_at')
         .eq('status', 'published')
       if (cat && cat.id) q = q.eq('category_id', cat.id)
       if (kw) q = q.ilike('title', `%${kw}%`)
@@ -255,6 +255,26 @@ Page({
       .slice(0, 50)
     const emptyHint = '还没有匹配的文章'
     this.setData({ articles, loading: false, emptyHint })
+    // 异步补全贡献者昵称：成员导入文章展示「由 [昵称] 贡献」，没设昵称就放空（不显示）
+    this.loadContributorNicks()
+  },
+
+  // 批量查 articles 里 contributor_id 对应的昵称；profiles 表 owner_id == articles.contributor_id（都是 openid）。
+  // 没设昵称的成员展示空，前端 wxml 用 wx:if 控制不渲染「由 ... 贡献」。
+  async loadContributorNicks() {
+    const list = this.data.articles || []
+    const ids = [...new Set(list.map((a) => a.contributor_id).filter(Boolean))]
+    if (!ids.length) return
+    const { data: profiles } = await cloud.database
+      .from('profiles').select('owner_id,nick_name').in('owner_id', ids)
+    const nameMap = {}
+    ;(profiles || []).forEach((p) => { if (p && p.owner_id != null) nameMap[p.owner_id] = p.nick_name })
+    // 用 id 匹配出昵称，没有就不用
+    const articles = list.map((a) => ({
+      ...a,
+      contributorNick: nameMap[a.contributor_id] || '',
+    }))
+    this.setData({ articles })
   },
 
   goDetail(e) {
