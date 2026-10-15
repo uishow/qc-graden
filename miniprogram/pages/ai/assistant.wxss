@@ -254,6 +254,19 @@
 }
 .bubble-sug:active { opacity: 0.8; }
 
+/* 反馈闭环：气泡底部 👎（低调，不抢视线；已反馈后变灰不再重复计数） */
+.bubble-vote {
+  display: flex; justify-content: flex-end;
+  margin-top: 10rpx;
+}
+.bubble-vote-btn {
+  font-size: 22rpx;
+  color: var(--c-text-2);
+  padding: 4rpx 8rpx;
+}
+.bubble-vote-btn.voted { opacity: 0.5; }
+.bubble-vote-btn:active { opacity: 0.7; }
+
 /* 输入条 */
 .chat-input {
   flex-shrink: 0;

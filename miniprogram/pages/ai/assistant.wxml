@@ -83,6 +83,10 @@
               bindtap="sendSuggest"
             >{{q}}</view>
           </view>
+          <!-- 反馈闭环：👎 一键记录「这条没帮上忙」，进 ai_feedback 待办清单（不打断对话） -->
+          <view wx:if="{{item.role !== 'user'}}" class="bubble-vote">
+            <text class="bubble-vote-btn {{item.voted ? 'voted' : ''}}" data-idx="{{index}}" bindtap="markBad">{{item.voted ? '👎 已反馈' : '👎 没帮上忙'}}</text>
+          </view>
         </view>
       </view>
     </view>

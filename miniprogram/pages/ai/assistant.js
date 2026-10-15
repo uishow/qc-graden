@@ -3,6 +3,7 @@ const store = require('../../utils/store')
 const access = require('../../utils/access')
 const { tagsOf, normalizeIds } = require('../../utils/arrayId')
 const write = require('../../utils/write')
+const aiFeedback = require('../../utils/aiFeedback')
 
 // —— 金额分→元（带千分位） ——
 function fen2yuan(fen, withComma) {
@@ -766,9 +767,10 @@ Page({
     }
   },
 
-  // 用户点「取消」：丢弃本次解析
+  // 用户点「取消」：丢弃本次解析（同时记为"理解错且用户放弃"信号）
   cancelEntry() {
     if (!this.data.pending) return
+    this._logFeedback('cancel', { intent: this.data.pending.kind, understood: this.data.pending.parsed })
     this.setData({ pending: null })
     this._appendMessage({ role: 'ai', text: '已取消本次录入。' })
   },
@@ -888,9 +890,43 @@ Page({
     if (formKind === 'material' && !built.name) { wx.showToast({ title: '请填写材料名称', icon: 'none' }); return }
     if (formKind === 'expense' && !built.amount) { wx.showToast({ title: '请填写金额', icon: 'none' }); return }
     if (formKind === 'diary' && !built.content) { wx.showToast({ title: '请填写日记内容', icon: 'none' }); return }
+    // ★ 反馈闭环最有价值的一类：用户手动改了哪些字段 = 模型/规则解析错在哪，且给出了「标准答案」
+    const before = this.data.pending && this.data.pending.parsed
+    const diff = this._diffParsed(formKind, before, built)
+    if (diff && diff.length) {
+      this._logFeedback('edit_diff', {
+        intent: formKind,
+        understood: before,
+        fixed: built,
+        reason: diff.join(','),
+      })
+    }
     this.setData({ formOpen: false, pending: { kind: formKind, parsed: built, rows: this._entryRows(formKind, built) } })
     this.setBarHidden(false)
     return this.confirmEntry() // 返回 promise，便于调用方/测试等待落库完成
+  },
+
+  // 对比「AI 解析结果」与「用户改后的结果」，返回被改动的字段名列表。
+  // 只比对各类型关键字段；数组（stage_ids/room_ids）比内容不看顺序；空↔空不算改动。
+  _diffParsed(kind, before, after) {
+    const b = before || {}
+    const a = after || {}
+    const fields = kind === 'material'
+      ? ['name', 'brand', 'quantity', 'unit', 'unit_price', 'note']
+      : kind === 'expense'
+        ? ['amount', 'type', 'pay_date', 'remark', 'stage_ids']
+        : ['title', 'content', 'diary_date', 'room_ids', 'stage_ids']
+    const same = (x, y) => {
+      if (Array.isArray(x) || Array.isArray(y)) {
+        const p = (Array.isArray(x) ? x : []).slice().sort().join('|')
+        const q = (Array.isArray(y) ? y : []).slice().sort().join('|')
+        return p === q
+      }
+      return String(x == null ? '' : x) === String(y == null ? '' : y)
+    }
+    const out = []
+    fields.forEach((f) => { if (!same(b[f], a[f])) out.push(f) })
+    return out
   },
 
   async _writeEntry(intent, data) {
@@ -1296,6 +1332,7 @@ Page({
         // 只列当前项目的日记：用户常跨项目找（如「999楼项目」是另一个项目），
         // 明确带上项目名，避免他以为是 AI 没找到、反复重试
         return {
+          miss: true, // 供 send() 记 no_result 反馈信号
           text: '在' + (projName ? '当前项目「' + projName + '」' : '当前项目') + '里没找到你说的那篇日记。\n' +
             '（日记是按项目隔离的，如果是别的项目里的日记，请先切到那个项目再问）\n当前的日记有：\n' + lines.join('\n') + '\n\n点下面的按钮直接查，或说「显示《某篇日记》的附件」：',
           // 引导做成可点按钮：用户照文字重打一遍很容易说法对不上（2026-10-15 实测「顺着引导说却没结果」）
@@ -1364,12 +1401,76 @@ Page({
   // 空处理器：用于拦截半屏表单内部的 tap / 滚动冒泡（避免点表单内部误关弹窗）
   noop() {},
 
+  // —— 反馈闭环：记录「AI 没帮上忙」的信号 ——
+  // signal: edit_diff(用户改了字段，含标准答案) / cancel / unparsed / no_result / retry / degraded / thumb_down
+  // 失败一律静默（utils/aiFeedback 内部已 try/catch），绝不打断主流程
+  _logFeedback(signal, extra) {
+    try {
+      const e = extra || {}
+      aiFeedback.log(signal, {
+        question: e.question || this._lastUserText || '',
+        understood: typeof e.understood === 'string' ? e.understood : JSON.stringify(e.understood || {}),
+        fixed: e.fixed == null ? '' : (typeof e.fixed === 'string' ? e.fixed : JSON.stringify(e.fixed)),
+        reply: e.reply || '',
+        intent: e.intent || '',
+        reason: e.reason || '',
+        projectId: store.getCurrentProjectId() || '',
+      })
+    } catch (err) { /* 忽略 */ }
+  },
+
+  // 判定「同一件事又问了一遍」：最近 6 条里出现过高度相似的用户原话。
+  // 归一化：去空白标点 + 数字统一成 #，再算 2-gram 重合率；≥0.6 视为重复提问。
+  _isRepeatAsk(text) {
+    const norm = (s) => String(s || '').replace(/[\s，。；、？！?!"'“”「」《》（）()]/g, '').replace(/\d+/g, '#')
+    const grams = (s) => {
+      const out = []
+      for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2))
+      return s.length === 1 ? [s] : out
+    }
+    const a = norm(text)
+    if (a.length < 4) return false
+    const ga = grams(a)
+    const users = (this.data.messages || []).slice(-6).filter((m) => m && m.role === 'user')
+    for (let i = 0; i < users.length; i++) {
+      const b = norm(users[i].text)
+      if (!b || b.length < 4) continue
+      if (b === a) return true
+      const gb = grams(b)
+      let hit = 0
+      ga.forEach((g) => { if (gb.indexOf(g) !== -1) hit++ })
+      const rate = hit / Math.max(1, Math.min(ga.length, gb.length))
+      // 阈值取 0.8 + 长度比约束：0.6 会把「水电阶段花了多少 / 木工阶段花了多少」
+      // 这种只有后半段相同的不同问题也算成重问（误报会污染反馈清单）
+      const lenRate = Math.min(a.length, b.length) / Math.max(a.length, b.length)
+      if (rate >= 0.8 && lenRate >= 0.6) return true
+    }
+    return false
+  },
+
+  // 用户点 👎：标记这条回答没帮上忙
+  markBad(e) {
+    const idx = Number(e.currentTarget.dataset.idx)
+    const msg = this.data.messages[idx]
+    if (!msg) return
+    if (msg.voted) return
+    this.setData({ ['messages[' + idx + '].voted']: 'bad' })
+    this._logFeedback('thumb_down', { question: this._lastUserText || '', reply: msg.text || '' })
+    wx.showToast({ title: '已记录，谢谢反馈', icon: 'none' })
+  },
+
   async send(src) {
     const text = String(typeof src === 'string' ? src : this.data.input || '').trim()
     if (!text || this.data.loading) return
+    // 反馈闭环：记住本轮原文，供 👎 / 解析失败等信号回填「用户到底说了什么」
+    this._lastUserText = text
     const messages = this.data.messages.concat([{ role: 'user', text }])
     this.setData({ messages, input: '', loading: true, lastId: 'msg' + (messages.length - 1) })
     const projectId = store.getCurrentProjectId()
+    // 同一句话（或高度相似）在最近 3 轮里又问了一遍 = 上一轮没帮上忙 → retry 信号
+    if (this._isRepeatAsk(text)) {
+      this._logFeedback('retry', { question: text, reason: 'repeat_ask' })
+    }
 
     // 统一收尾：无论成功/失败/异常都复位 loading，避免 UI 卡死（2026-10-15 修：裸调 tryParseIntakeMaterial 抛错未捕获导致死机）
     const finish = (replyText, images, suggestions) => {
@@ -1406,6 +1507,8 @@ Page({
         if (this._isDiaryLookup(text)) {
           const found = await this._handleDiaryLookup(text)
           if (found) {
+            // 命中不到具体那篇（返回的是引导列表）也算没帮上忙：no_result
+            if (found.miss) this._logFeedback('no_result', { intent: 'diary_lookup', question: text, reason: 'diary_not_matched' })
             finish(found.text, found.images, found.suggestions)
             return
           }
@@ -1426,6 +1529,8 @@ Page({
             if (llm) parsed = llm
           }
           if (parsed) { this._showEntryPreview(intent, parsed); return }
+          // 判定是录入但字段没抽出来 = 典型「规则没覆盖的说法」，是最有价值的一类反馈
+          this._logFeedback('unparsed', { intent, question: text, reason: 'no_field_extracted' })
           finish(this._formatHint(intent))
           return
         }
@@ -1454,6 +1559,8 @@ Page({
             ? '（AI 调用失败：' + (result.aiError || '未知原因') + '）'
             : '（AI 返回为空，已用项目现状兜底）'
         extra = '\n\n' + tip
+        // 降级回答 = 用户拿到的不是真 AI 答案，值得统计（配错/欠费/超时都会落这里）
+        this._logFeedback('degraded', { question: text, reply: answer, reason: result.reason })
       }
       // AI 自由发挥的引导（"你可以试试说…"）用户照着重打常对不上 → 抓出示例指令做成可点 chips
       finish(answer + extra, null, this._suggestFromReply(answer))
@@ -1462,4 +1569,5 @@ Page({
       finish('抱歉，处理出错了：' + (e && e.message ? e.message : '未知错误'))
     }
   },
+
 })
