@@ -152,7 +152,7 @@
       <view wx:elif="{{historyList.length === 0}}" class="muted" style="margin-top:16rpx">{{historyEmptyText || '还没有反馈记录'}}</view>
 
       <block wx:else>
-        <view wx:for="{{historyList}}" wx:key="id" class="history-item">
+        <view wx:for="{{historyList}}" wx:key="id" class="history-item history-tap" data-index="{{index}}" bindtap="openDetail">
           <view class="between">
             <view class="muted">{{item.timeText}}</view>
             <view style="display:flex;gap:8rpx;align-items:center">
@@ -188,6 +188,88 @@
         </view>
       </block>
     </block>
+  </view>
+
+  <!-- 反馈详情弹窗：点击历史条目后从底部弹出，把每条反馈的完整信息呈现出来
+       （之前只列了缩略评分 + 系统+意见，看不到具体分数数字、平台、版本号、来源） -->
+  <view wx:if="{{showDetail && detailItem}}" class="mask" bindtap="closeDetail">
+    <view class="sheet" catchtap="" style="max-height:78vh">
+      <view class="sheet-head">
+        <view class="between">
+          <view style="font-weight:600;font-size:32rpx">反馈详情</view>
+          <view class="muted" bindtap="closeDetail">关闭 ✕</view>
+        </view>
+        <view class="muted" style="margin-top:8rpx">{{detailItem.timeText}} 提交</view>
+      </view>
+      <view class="sheet-body">
+        <!-- 三维评分（数字 + 星） -->
+        <view class="detail-section">
+          <view class="detail-section-title">综合评分</view>
+          <view class="detail-dim-row">
+            <view class="detail-dim-name">易用性</view>
+            <view class="detail-dim-stars">
+              <text wx:for="{{5}}" wx:key="du{{index}}" class="h-star {{detailItem.scores.usability > index ? 'h-star-on' : ''}}">★</text>
+            </view>
+            <view class="detail-dim-num">{{detailItem.scores.usability || 0}} 分</view>
+          </view>
+          <view class="detail-dim-row">
+            <view class="detail-dim-name">美观性</view>
+            <view class="detail-dim-stars">
+              <text wx:for="{{5}}" wx:key="da{{index}}" class="h-star {{detailItem.scores.aesthetics > index ? 'h-star-on' : ''}}">★</text>
+            </view>
+            <view class="detail-dim-num">{{detailItem.scores.aesthetics || 0}} 分</view>
+          </view>
+          <view class="detail-dim-row">
+            <view class="detail-dim-name">功能性</view>
+            <view class="detail-dim-stars">
+              <text wx:for="{{5}}" wx:key="df{{index}}" class="h-star {{detailItem.scores.functionality > index ? 'h-star-on' : ''}}">★</text>
+            </view>
+            <view class="detail-dim-num">{{detailItem.scores.functionality || 0}} 分</view>
+          </view>
+        </view>
+
+        <!-- 意见（仅在填写时展示） -->
+        <view wx:if="{{detailItem.comment}}" class="detail-section">
+          <view class="detail-section-title">意见与建议</view>
+          <view class="detail-comment">{{detailItem.comment}}</view>
+        </view>
+        <view wx:else class="detail-section">
+          <view class="detail-section-title">意见与建议</view>
+          <view class="muted">未填写</view>
+        </view>
+
+        <!-- 环境信息 -->
+        <view class="detail-section">
+          <view class="detail-section-title">环境信息</view>
+          <view wx:if="{{historyScope === 'all' && detailItem.openidTail}}" class="detail-meta-row">
+            <text class="muted">用户</text><text>···{{detailItem.openidTail}}</text>
+          </view>
+          <view wx:if="{{detailItem.system}}" class="detail-meta-row">
+            <text class="muted">系统</text><text>{{detailItem.system}}</text>
+          </view>
+          <view wx:if="{{detailItem.app_version}}" class="detail-meta-row">
+            <text class="muted">版本</text><text>v{{detailItem.app_version}}</text>
+          </view>
+          <view wx:if="{{detailItem.platform}}" class="detail-meta-row">
+            <text class="muted">平台</text><text>{{detailItem.platform}}</text>
+          </view>
+          <view wx:if="{{!detailItem.system && !detailItem.app_version && !detailItem.platform && historyScope !== 'all'}}" class="muted">未记录</view>
+        </view>
+
+        <!-- 来源标记：本地缓存 vs 云端真数据 -->
+        <view class="detail-section">
+          <view class="detail-meta-row">
+            <text class="muted">来源</text>
+            <text wx:if="{{detailItem.fromLocal}}" style="color:var(--c-text-2)">本地缓存（云端暂无此条，多为刚提交；不会上传）</text>
+            <text wx:else style="color:var(--c-secondary)">云端</text>
+          </view>
+          <view wx:if="{{detailItem.id}}" class="detail-meta-row">
+            <text class="muted">记录 ID</text>
+            <text style="font-family:monospace;font-size:22rpx;word-break:break-all">{{detailItem.id}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
   </view>
 
 </view>

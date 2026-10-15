@@ -116,3 +116,68 @@
   margin: 8rpx 0;
 }
 .history-meta { font-size: 22rpx; margin-top: 10rpx; }
+
+/* 历史条目整体可点击：视觉提示（弱化反馈，避免和真按钮混淆） */
+.history-item.history-tap {
+  cursor: pointer;
+  transition: background-color .15s ease;
+  margin: 0 -16rpx;
+  padding-left: 16rpx;
+  padding-right: 16rpx;
+  border-radius: 12rpx;
+}
+.history-item.history-tap:active {
+  background-color: var(--c-secondary-bg);
+}
+
+/* ============================================================
+ * 反馈详情弹窗
+ * ============================================================ */
+.detail-section {
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid var(--c-card-border);
+}
+.detail-section:last-child { border-bottom: none; }
+.detail-section-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--c-text);
+  margin-bottom: 16rpx;
+}
+.detail-dim-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 10rpx 0;
+}
+.detail-dim-name {
+  font-size: 26rpx;
+  color: var(--c-text-2);
+  width: 110rpx;
+  flex-shrink: 0;
+}
+.detail-dim-stars { display: flex; gap: 2rpx; flex: 1; min-width: 0; }
+.detail-dim-num {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: var(--c-accent);
+  flex-shrink: 0;
+}
+.detail-comment {
+  background: var(--c-secondary-bg);
+  border-radius: 12rpx;
+  padding: 18rpx 22rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--c-text);
+}
+.detail-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+  padding: 8rpx 0;
+  font-size: 26rpx;
+}
+.detail-meta-row .muted { min-width: 110rpx; flex-shrink: 0; }

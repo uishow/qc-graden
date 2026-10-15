@@ -50,6 +50,9 @@ Page({
     historyList: [],
     historyLoading: false,
     historyEmptyText: '',
+    // 详情弹窗：点击历史条目后从底部弹出
+    showDetail: false,
+    detailItem: null,
   },
 
   onShow() {
@@ -98,6 +101,24 @@ Page({
     const next = e.currentTarget.dataset.scope
     if (!next || next === this.data.historyScope) return
     this.setData({ historyScope: next, historyList: [] }, () => this.loadHistory())
+  },
+
+  // 点击历史条目 → 打开详情弹窗（含每维分数数字、评论、来源 ID 等完整信息）
+  openDetail(e) {
+    const idx = Number(e.currentTarget.dataset.index || 0)
+    const item = (this.data.historyList || [])[idx]
+    if (!item) return
+    this.setData({ detailItem: item, showDetail: true })
+    // 自定义 tabBar 会盖住 fixed 弹窗，临时隐藏；关闭时恢复
+    try { if (typeof this.getTabBar === 'function' && this.getTabBar()) this.getTabBar().setData({ hidden: true }) } catch (err) {}
+  },
+
+  closeDetail() {
+    this.setData({ showDetail: false })
+    // 短暂延迟恢复 tabBar，避免动画过程中的层级叠加错位
+    setTimeout(() => {
+      try { if (typeof this.getTabBar === 'function' && this.getTabBar()) this.getTabBar().setData({ hidden: false }) } catch (err) {}
+    }, 200)
   },
 
   // 拉取历史反馈（按当前 historyScope：self/all）
