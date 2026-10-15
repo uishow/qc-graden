@@ -489,7 +489,6 @@ Page({
       }
       const totalYuan = (intake.total_price / 100).toFixed(2)
       const unitYuan = (intake.unit_price / 100).toFixed(2)
-      this._afterEntryJump('material') // 成功后自动跳「花费」tab（材料清单在其中）
       const lines = [
         '✅ 已录入材料清单：',
         `· 名称：${intake.name}`,
@@ -497,7 +496,7 @@ Page({
         `· 状态：待购`,
         `· 备注：${intake.note}`,
         '',
-        '💡 即将跳到「花费 · 材料清单」，可加规格/推进状态。',
+        '💡 可在「花费 · 材料清单」里加规格/推进状态。',
       ]
       return lines.join('\n')
     } catch (e) {
@@ -945,7 +944,6 @@ Page({
       const r = await write.insert('expenses', projectId, { ...data, version: 1, project_id: projectId, deleted: false })
       if (r && r.error) return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
       const typeName = { labor: '人工', design: '设计', deposit: '订金/定金', other: '其他', material: '材料' }[intake.type] || '其他'
-      this._afterEntryJump('expense') // 成功后自动跳「花费」tab
       const lines = [
         '✅ 已录入花费：',
         `· 金额：¥${(intake.amount / 100).toFixed(2)}（${typeName}）`,
@@ -953,7 +951,7 @@ Page({
         (intake.stage_ids && intake.stage_ids.length) ? '· 已关联阶段' : '',
         intake.remark ? `· 备注：${intake.remark}` : '',
         '',
-        '💡 即将跳到「花费」页查看。',
+        '💡 可在「花费」页查看这笔记录。',
       ].filter(Boolean)
       return lines.join('\n')
     } catch (e) {
@@ -980,7 +978,6 @@ Page({
         created_at: now, updated_at: now,
       })
       if (r && r.error) return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
-      this._afterEntryJump('diary') // 成功后自动跳「日记」tab
       const lines = [
         '✅ 已录入日记：',
         `· 标题：${intake.title}`,
@@ -988,7 +985,7 @@ Page({
         (intake.room_ids && intake.room_ids.length) ? '· 已关联房间' : '',
         (intake.stage_ids && intake.stage_ids.length) ? '· 已关联阶段' : '',
         '',
-        '💡 即将跳到「日记」页查看。',
+        '💡 可在「日记」页查看这篇记录。',
       ].filter(Boolean)
       return lines.join('\n')
     } catch (e) {
@@ -1328,16 +1325,6 @@ Page({
     const urls = e.currentTarget.dataset.imgs || []
     const cur = e.currentTarget.dataset.cur
     if (urls.length) wx.previewImage({ current: cur, urls })
-  },
-
-  // —— 录入成功后自动跳对应页面：日记→日记 tab；花费/材料→花费 tab（材料清单在其中）——
-  _afterEntryJump(kind) {
-    setTimeout(() => {
-      try {
-        if (kind === 'diary') wx.switchTab({ url: '/pages/diary/list' })
-        else wx.switchTab({ url: '/pages/budget/overview' })
-      } catch (e) { /* 忽略跳转失败，不打断 */ }
-    }, 900) // 留 0.9s 让用户看到 ✅ 回执再跳
   },
 
   // 从 AI 回答里抓出「示例指令」做成可点 chips。

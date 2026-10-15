@@ -69,7 +69,7 @@ global.wx = {
     },
   },
   onKeyboardHeightChange() {}, offKeyboardHeightChange() {},
-  switchTab() {}, navigateTo() {}, previewImage() {},
+  switchTab() { global.__switchTabCount++ }, navigateTo() {}, previewImage() {},
   showToast() {}, hideLoading() {}, showLoading() {},
 }
 
@@ -164,6 +164,13 @@ async function main() {
   lastInsert = null
   await ctx._handleIntakeExpense(e2)
   check('花费写入 expenses + remark', lastInsert && lastInsert.col === 'expenses' && lastInsert.data.remark === '水电尾款')
+
+  console.log('\n=== F2. 录入后不再自动跳转（用户 2026-10-15 要求去掉） ===')
+  global.__switchTabCount = 0
+  await ctx._handleIntakeDiary(d1)
+  await ctx._handleIntakeMaterial(m1)
+  await ctx._handleIntakeExpense(e2)
+  check('三类录入后均未触发 switchTab', global.__switchTabCount === 0, 'switchTab 次数=' + global.__switchTabCount)
 
   console.log('\n=== G. 录入预览确认卡（Phase 1） ===')
   // 需支持微信 setData 的路径键（如 'form.stage_ids'），否则无法验证多选切换
