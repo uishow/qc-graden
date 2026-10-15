@@ -34,8 +34,16 @@ exports.main = async (event) => {
       ? await col.order('created_at', { ascending: false }).limit(100).get()
       : await col.where({ openid }).order('created_at', { ascending: false }).limit(100).get()
     rows = r.data || []
+    // ★ 2026-10-15 诊断：打出当前查询条件 + 命中行数 + 前 1 行的 openid 比对
+    console.log('[feedbackList] query', JSON.stringify({
+      wxOpenid: openid,
+      scope, requested,
+      mgr, hitCount: rows.length,
+      firstHitOpenid: rows[0] && rows[0].openid,
+    }))
   } catch (e) {
     // 集合不存在/无读权限：兜底返回空（首条反馈提交时集合才会被创建）
+    console.error('[feedbackList] query failed:', e)
     return { ok: true, isManager: mgr, scope, list: [] }
   }
 

@@ -51,15 +51,19 @@ exports.main = async (event) => {
 
   const db = cloud.database()
   try {
+    // ★ 2026-10-15 诊断日志：写之前打 event 实际收到的字段，
+    //   排查「客户端 UI 显示 4 分但云端存 0 分」是不是嵌套对象在 HarmonyOS 平台被吞字段
+    console.log('[feedbackSubmit] event received:', JSON.stringify(event || {}))
     await db.collection('app_feedback').add({ data: row })
-    return { ok: true }
+    return { ok: true, _debug: { wroteScores: safeScores, wroteOpenid: openid } }
   } catch (e) {
     // 集合不存在：自动创建后重试一次（仅首次需要）
     try {
       await ensureCollection(db, 'app_feedback')
       await db.collection('app_feedback').add({ data: row })
-      return { ok: true }
+      return { ok: true, _debug: { wroteScores: safeScores, wroteOpenid: openid, afterCreate: true } }
     } catch (e2) {
+      console.error('[feedbackSubmit] write failed:', e2)
       return { ok: false, message: '提交失败：' + ((e2 && e2.message) || e2) }
     }
   }
