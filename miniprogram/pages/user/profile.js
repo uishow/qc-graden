@@ -286,6 +286,58 @@ Page({
     this.setData({ ['aiForm.' + field]: e.detail.value })
   },
 
+  // 一键粘贴：剪贴板内容按「URL\n模型名\nAPI Key」三行格式自动填入三个输入框
+  // 兼容：首尾空白自动 trim；空行忽略；行数 ≥3 即可（多余行忽略）
+  pasteAI() {
+    if (!wx.getClipboardData) {
+      wx.showToast({ title: '当前版本不支持读取剪贴板', icon: 'none' })
+      return
+    }
+    wx.getClipboardData({
+      success: (res) => {
+        const raw = String(res.data || '').trim()
+        if (!raw) {
+          wx.showToast({ title: '剪贴板为空', icon: 'none' })
+          return
+        }
+        // 按行拆分，忽略空行
+        const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+        if (lines.length < 3) {
+          wx.showToast({
+            title: '需 3 行：URL/模型/Key（当前 ' + lines.length + ' 行）',
+            icon: 'none',
+            duration: 2200,
+          })
+          return
+        }
+        // 第 1 行必须像 http(s)://，否则提示格式异常
+        const baseUrl = lines[0]
+        if (!/^https?:\/\//i.test(baseUrl)) {
+          wx.showToast({ title: '首行需为 http(s):// 开头的接口地址', icon: 'none' })
+          return
+        }
+        const model = lines[1]
+        const apiKey = lines[2]
+        // 第 2/3 行兜底：model 太长或 key 太短都给个宽松告警而非拦截（粘贴密钥常被聊天工具加空格/换行）
+        if (!model || model.length > 100) {
+          wx.showToast({ title: '模型名格式异常', icon: 'none' })
+          return
+        }
+        if (!apiKey || apiKey.length < 8) {
+          wx.showToast({ title: 'API Key 长度过短（≥8）', icon: 'none' })
+          return
+        }
+        this.setData({
+          aiForm: { base_url: baseUrl, model, api_key: apiKey },
+        })
+        wx.showToast({ title: '已填入，点保存生效', icon: 'success' })
+      },
+      fail: () => {
+        wx.showToast({ title: '读取剪贴板失败', icon: 'none' })
+      },
+    })
+  },
+
   cancelAI() {
     this.setBarHidden(false)
     this.setData({ showAISet: false })
