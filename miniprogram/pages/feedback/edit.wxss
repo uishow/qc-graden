@@ -44,7 +44,7 @@
 }
 .receipt-dim-name { font-size: 24rpx; flex: 0 0 auto; min-width: 100rpx; }
 .receipt-stars { display: flex; gap: 4rpx; }
-.r-star { font-size: 28rpx; color: var(--c-card-border); line-height: 1; padding: 0 2rpx; }
+.r-star { font-size: 28rpx; color: #C9B89B; line-height: 1; padding: 0 2rpx; }
 .r-star-on { color: var(--c-accent); }
 .receipt-comment {
   background: var(--c-secondary-bg);
@@ -102,7 +102,7 @@
 }
 .history-dim { display: flex; align-items: center; gap: 6rpx; }
 .history-stars { display: flex; gap: 2rpx; }
-.h-star { font-size: 24rpx; color: var(--c-card-border); line-height: 1; }
+.h-star { font-size: 24rpx; color: #C9B89B; line-height: 1; }
 .h-star-on { color: var(--c-accent); }
 
 .history-comment {
