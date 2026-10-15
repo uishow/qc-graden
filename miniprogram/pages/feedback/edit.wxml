@@ -92,21 +92,21 @@
         <view class="receipt-grid">
           <view class="receipt-dim">
             <text class="muted receipt-dim-name">易用性</text>
-            <text class="receipt-stars">
+            <view class="receipt-stars">
               <text wx:for="{{5}}" wx:key="ru{{index}}" class="r-star {{doneSnapshot.scores.usability > index ? 'r-star-on' : ''}}">★</text>
-            </text>
+            </view>
           </view>
           <view class="receipt-dim">
             <text class="muted receipt-dim-name">美观性</text>
-            <text class="receipt-stars">
+            <view class="receipt-stars">
               <text wx:for="{{5}}" wx:key="ra{{index}}" class="r-star {{doneSnapshot.scores.aesthetics > index ? 'r-star-on' : ''}}">★</text>
-            </text>
+            </view>
           </view>
           <view class="receipt-dim">
             <text class="muted receipt-dim-name">功能性</text>
-            <text class="receipt-stars">
+            <view class="receipt-stars">
               <text wx:for="{{5}}" wx:key="rf{{index}}" class="r-star {{doneSnapshot.scores.functionality > index ? 'r-star-on' : ''}}">★</text>
-            </text>
+            </view>
           </view>
         </view>
       </view>
@@ -117,8 +117,8 @@
         <view class="receipt-comment">{{doneSnapshot.comment}}</view>
       </view>
 
-      <view wx:if="{{doneSnapshot.submittedAt}}" class="receipt-time">
-        提交于 {{doneSnapshot.submittedAt}}
+      <view wx:if="{{doneSnapshot.submittedAtText}}" class="receipt-time">
+        提交于 {{doneSnapshot.submittedAtText}}
       </view>
     </view>
 
@@ -163,23 +163,23 @@
           <view class="history-row">
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">易用性</text>
-              <text class="history-stars">
+              <view class="history-stars">
                 <text wx:for="{{5}}" wx:key="u{{index}}" class="h-star {{item.scores.usability > index ? 'h-star-on' : ''}}">★</text>
-              </text>
+              </view>
               <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.usability || 0}}分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">美观性</text>
-              <text class="history-stars">
+              <view class="history-stars">
                 <text wx:for="{{5}}" wx:key="a{{index}}" class="h-star {{item.scores.aesthetics > index ? 'h-star-on' : ''}}">★</text>
-              </text>
+              </view>
               <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.aesthetics || 0}}分</text>
             </view>
             <view class="history-dim">
               <text class="muted" style="font-size:22rpx">功能性</text>
-              <text class="history-stars">
+              <view class="history-stars">
                 <text wx:for="{{5}}" wx:key="f{{index}}" class="h-star {{item.scores.functionality > index ? 'h-star-on' : ''}}">★</text>
-              </text>
+              </view>
               <text class="muted" style="font-size:22rpx;margin-left:4rpx">{{item.scores.functionality || 0}}分</text>
             </view>
           </view>

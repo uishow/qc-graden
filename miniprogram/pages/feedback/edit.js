@@ -254,6 +254,8 @@ Page({
         hasScores: anyRated,
         hasComment: !!text,
         submittedAt: nowISO,
+        // ★ 2026-10-15 改：回执卡「提交于」也按本地时间显示（之前直接显示 ISO 串）
+        submittedAtText: formatLocal(nowISO, 'datetime'),
       },
     })
     wx.showToast({ title: '已提交，谢谢', icon: 'success' })
