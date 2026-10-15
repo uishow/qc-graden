@@ -14,8 +14,7 @@
         <text wx:if="{{keyword}}" class="kb-search-clear" bindtap="clearKeyword">✕</text>
       </view>
       <view class="kb-ai-btn" bindtap="goChat">
-        <text class="kb-ai-icon">🤖</text>
-        <text class="kb-ai-text">AI</text>
+        <text class="kb-ai-text">AI问答</text>
       </view>
     </view>
 

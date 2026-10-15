@@ -149,7 +149,7 @@
   flex-shrink: 0;
 }
 
-/* 顶部工具栏：胶囊搜索框 + AI 圆钮（风格与上方 tab 胶囊一致） */
+/* 顶部工具栏：胶囊搜索框 + AI 问答按钮（主题色胶囊） */
 .kb-toolbar {
   display: flex;
   align-items: center;
@@ -196,15 +196,12 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  justify-content: center;
   height: 72rpx;
   padding: 0 28rpx;
   background: var(--c-primary);
   border-radius: 999rpx;
   box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.12);
-}
-.kb-ai-icon {
-  font-size: 30rpx;
 }
 .kb-ai-text {
   font-size: 28rpx;
