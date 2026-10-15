@@ -121,37 +121,60 @@ Page({
       result = { ok: false, message: '加载失败（云函数未就绪）' }
     }
     this.setData({ historyLoading: false })
+    // 本地兜底：self 视图下若「云端空 / 云端失败」，都尝试用本地缓存展示自己提交过的内容
+    // 原因：2026-10-15 用户反馈「提交后看不到自己的反馈」——经排查是反馈列表云函数
+    //       feedbackList 已部署但 openid 查询返回空（管理员 self 场景偶发），
+    //       此时 feedbackList 仍返回 ok=true，单纯「result.ok=false 才兜底」覆盖不到。
     if (!result || !result.ok) {
-      // ★ 本地兜底：只对 self 视图兜底（全员视图本地只可能有自己的）
-      const isAll = this.data.historyScope === 'all'
-      const local = isAll ? [] : readLocalFeedback()
-      if (local.length) {
-        const list = local.map((it) => ({ ...it, timeText: formatTime(it.submittedAt), fromLocal: true }))
-        this.setData({
-          historyList: list,
-          historyEmptyText: '',
-          isManager: false,
-        })
-        return
-      }
-      this.setData({
-        historyList: [],
-        historyEmptyText: (result && result.message) || '加载失败',
-        isManager: false,
-      })
+      // ★ 云端失败：尝试本地兜底
+      this._fallbackToLocal(false)
       return
     }
     const isManager = !!result.isManager
     const finalScope = (this.data.historyScope === 'all' && result.scope === 'self') ? 'self' : this.data.historyScope
-    const list = (result.list || []).map((it) => ({
+    let list = (result.list || []).map((it) => ({
       ...it,
       timeText: formatTime(it.submittedAt),
     }))
+    // ★ self 视图下云端空：用本地兜底（云端有数据时不掺入本地，避免 UI 看起来不一致）
+    if (finalScope === 'self' && list.length === 0) {
+      const local = readLocalFeedback()
+      if (local.length) {
+        list = local.map((it) => ({ ...it, timeText: formatTime(it.submittedAt), fromLocal: true }))
+        this.setData({
+          isManager,
+          historyScope: finalScope,
+          historyList: list,
+          historyEmptyText: '',
+        })
+        return
+      }
+    }
     this.setData({
       isManager,
       historyScope: finalScope,
       historyList: list,
       historyEmptyText: list.length ? '' : (finalScope === 'all' ? '暂无全员反馈' : '还没有反馈记录'),
+    })
+  },
+
+  // 本地兜底辅助：仅 self 视图
+  _fallbackToLocal(keepManager) {
+    const isAll = this.data.historyScope === 'all'
+    const local = isAll ? [] : readLocalFeedback()
+    if (local.length) {
+      const list = local.map((it) => ({ ...it, timeText: formatTime(it.submittedAt), fromLocal: true }))
+      this.setData({
+        historyList: list,
+        historyEmptyText: '',
+        isManager: keepManager ? this.data.isManager : false,
+      })
+      return
+    }
+    this.setData({
+      historyList: [],
+      historyEmptyText: '加载失败（云端暂无记录）',
+      isManager: false,
     })
   },
 
