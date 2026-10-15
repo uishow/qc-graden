@@ -31,22 +31,21 @@ exports.main = async (event) => {
   try {
     const col = db.collection('app_feedback')
     if (scope === 'all') {
-      // ★ 关键：.order() 之前必须先 .where()，否则 col.order is not a function
-      //   历史 all 视图也用 col.order() 直接调过，但用户之前没切到 all，所以这个雷没爆
-      //   这次重构显式加 .where({}) 走 aiAssistant 同款链式
-      const r = await col.where({}).order('created_at', 'desc').limit(100).get()
-      rows = r.data || []
+      // 不用 .order()：当前 wx-server-sdk 报 'col.where().order is not a function'
+      //   改拉全表 + JS 端 sort（项目内最多几十条，无性能问题）
+      const r = await col.where({}).limit(100).get()
+      rows = (r.data || []).sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
     } else {
       // self 视图：先按业务字段 openid 查，0 条时再按云开发自动加的 _openid 查一次取并集
-      // 背景：2026-10-15 用户场景是云端有数据但 list=[]，怀疑字段名（业务 openid vs 系统 _openid）
-      //   或 openid 值在不同端不一致；取两次能最大限度兜底
-      const r1 = await col.where({ openid }).order('created_at', 'desc').limit(100).get()
-      rows = r1.data || []
+      // 同样不调 .order()，拉全后 JS 端 sort
+      const r1 = await col.where({ openid }).limit(100).get()
+      rows = (r1.data || [])
       if (rows.length === 0) {
-        const r2 = await col.where({ _openid: openid }).order('created_at', 'desc').limit(100).get()
+        const r2 = await col.where({ _openid: openid }).limit(100).get()
         rows = r2.data || []
         console.log('[feedbackList] self fallback to _openid, hitCount:', rows.length)
       }
+      rows = rows.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
     }
     // ★ 2026-10-15 诊断：打出当前查询条件 + 命中行数 + 前 1 行的 openid 比对
     console.log('[feedbackList] query', JSON.stringify({
