@@ -164,6 +164,9 @@ Page({
       const s = g.samples[0] || {}
       if (s.question) lines.push('   用户说：' + s.question)
       if (s.reason) lines.push('   差异字段：' + s.reason)
+      // ★ AI 的回复必须导出：光看「用户说了什么」无法定位（2026-10-15 首批真实反馈
+      //   里全是「AI 解析：{}」，靠回复才能分辨是「查到了但没附件」还是「根本没匹配上」）
+      if (s.reply) lines.push('   AI 回复：' + String(s.reply).replace(/\n/g, ' / ').slice(0, 200))
       if (s.understood) lines.push('   AI 解析：' + s.understood)
       if (s.fixed) lines.push('   用户改后：' + s.fixed)
     })

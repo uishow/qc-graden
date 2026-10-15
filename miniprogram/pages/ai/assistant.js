@@ -1346,7 +1346,15 @@ Page({
       const signed = await cloud.storage.createSignedUrls(fileIds)
       const urls = (signed.data || []).map((x) => x.signedUrl).filter(Boolean)
       if (!urls.length) {
-        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》，但图片链接获取失败（' + ((signed.error && (signed.error.message || signed.error.errMsg)) || '未知原因') + '），请到「日记」页查看。' }
+        // 区分两种"看不到图"：① 文件记录还在但云存储里取不到（失效/被删/无权限）
+        // ② 其它未知错误。旧文案一律说"获取失败（未知原因）"，用户只能干瞪眼（2026-10-15 实测）
+        const e = signed.error || {}
+        const why = e.message || '未知原因'
+        const detail = e.failedCount ? '（' + fileIds.length + ' 个附件里有 ' + e.failedCount + ' 个取不到）' : ''
+        return {
+          text: '📖 找到日记《' + (hit.title || '无标题') + '》，它记了 ' + fileIds.length + ' 个附件，但都打不开：' + why + detail +
+            '\n这通常是附件文件在云存储里已失效（被删除、或不是当前环境的文件）。请到「日记」页打开这篇日记重新上传一次。',
+        }
       }
       return {
         text: '🖼️ ' + (projName ? '「' + projName + '」' : '') + '日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '）的附件，共 ' + urls.length + ' 张，点击图片可放大：',
@@ -1369,25 +1377,37 @@ Page({
   // 措辞稍变就命中不了解析 → 表现就是「顺着引导说却出不来结果」（2026-10-15 实测）。
   // 规则：引号里像指令的（含显示/录入/把…改为 等动词）原样成按钮；
   //       《》里的是已知日记标题时补成「显示《标题》的附件」；最多 3 条。
+  // 占位示例（LLM 爱写「显示 XX 那篇日记的附件」这种带占位符的示范句）。
+  // 抓成按钮 = 点了必然失败（用户 2026-10-15 首批反馈里就有这条，且被判成「查不到结果」）。
+  _isPlaceholder(s) {
+    const t = String(s || '')
+    return /x{2,}|X{2,}|某[某篇个一]|示例|举例|比如|yyy|zzz|\.{3,}|…/.test(t)
+  },
+
   _suggestFromReply(reply) {
     const t = String(reply || '')
     const out = []
     const push = (s) => {
       s = String(s || '').trim()
       if (s.length < 4 || s.length > 40) return
+      if (this._isPlaceholder(s)) return // ★ 占位示例不做按钮：点了必然没结果
       if (out.indexOf(s) === -1 && out.length < 3) out.push(s)
     }
     const cmdRe = /(显示|查看|打开|调出|翻出|录入|添加|登记|记一笔|记录|把|将|改为|改成|设为|标记为|修改)/;
-    const diaryTitles = (this.data.raw && this.data.raw.diaries || []).map((d) => String(d.title || ''))
+    const diaries = (this.data.raw && this.data.raw.diaries) || []
     const re = /[「『“"]([^」』”"]{2,40})[」』”"]|《([^》]{2,40})》/g
     let m
     while ((m = re.exec(t)) && out.length < 3) {
       const raw = String(m[1] || m[2] || '').trim()
       if (!raw) continue
       if (cmdRe.test(raw)) { push(raw); continue }
-      // 《标题》形态：只有确实是项目里的日记标题才补成调图指令，避免生成乱七八糟的按钮
-      const isDiary = diaryTitles.some((n) => n && (n === raw || n.indexOf(raw) !== -1 || raw.indexOf(n) !== -1))
-      if (isDiary) push('显示《' + raw + '》的附件')
+      // 《标题》形态：只有「确实是项目里的日记标题 **且这篇确实有附件**」才补成调图指令。
+      // 之前没校验 hasImage → 给没附件的日记也生成调图按钮，点了只能回"确实没有存附件"（2026-10-15 实测）
+      const hit = diaries.find((d) => {
+        const n = String(d.title || '')
+        return n && (n === raw || n.indexOf(raw) !== -1 || raw.indexOf(n) !== -1)
+      })
+      if (hit && hit.hasImage) push('显示《' + String(hit.title || raw) + '》的附件')
     }
     return out
   },
@@ -1430,6 +1450,11 @@ Page({
     }
     const a = norm(text)
     if (a.length < 4) return false
+    // 无意义重复（「好的好的好的…」这类）不算重问：它会污染反馈清单
+    // （2026-10-15 首批真实反馈里就混进了一条，纯噪声）
+    const uniq = {}
+    for (let i = 0; i < a.length; i++) uniq[a[i]] = 1
+    if (Object.keys(uniq).length <= 2) return false
     const ga = grams(a)
     const users = (this.data.messages || []).slice(-6).filter((m) => m && m.role === 'user')
     for (let i = 0; i < users.length; i++) {

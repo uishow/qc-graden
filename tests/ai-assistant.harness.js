@@ -94,7 +94,9 @@ ctx.data = {
   },
   raw: {
     expenses: [{ amount: 500000, type: 'labor', pay_date: '2026-10-15', stage_ids: ['s1'] }],
-    materials: [], diaries: [{ title: '土建进场日记 999' }, { title: '水电验收' }],
+    materials: [],
+    // hasImage 决定调图 chips 是否生成（真实形状：d3 有 6 图 / d2 一张都没有）
+    diaries: [{ title: '土建进场日记 999', hasImage: true }, { title: '水电验收', hasImage: false }],
     stages: [
       { id: 's0', name: '准备阶段', status: 'pending' },
       { id: 's1', name: '水电改造', status: 'doing' },
@@ -391,9 +393,19 @@ async function round2() {
     return r.length === 1 && r[0] === '显示《土建进场日记 999》的附件'
   })(), JSON.stringify(ctx._suggestFromReply('你可以试试说：「显示《土建进场日记 999》的附件」')))
   check('《已知日记标题》补成调图指令', (() => {
-    const r = ctx._suggestFromReply('直接说《水电验收》就行')
-    return r.length === 1 && r[0] === '显示《水电验收》的附件'
-  })(), JSON.stringify(ctx._suggestFromReply('直接说《水电验收》就行')))
+    // 用有附件的那篇（水电验收 hasImage:false，按新规则不该生成调图按钮）
+    const r = ctx._suggestFromReply('直接说《土建进场日记 999》就行')
+    return r.length === 1 && r[0] === '显示《土建进场日记 999》的附件'
+  })(), JSON.stringify(ctx._suggestFromReply('直接说《土建进场日记 999》就行')))
+  // 2026-10-15 首批真实反馈：LLM 爱写「显示 XX 那篇日记的附件」这种带占位符的示范句，
+  // 被抓成按钮 → 用户点了必然失败（清单里就有一条 no_result/查不到结果）
+  check('占位示例不做按钮（XX）', ctx._suggestFromReply('你可以试试说「显示 XX 那篇日记的附件」').length === 0,
+    JSON.stringify(ctx._suggestFromReply('你可以试试说「显示 XX 那篇日记的附件」')))
+  check('占位示例不做按钮（某篇）', ctx._suggestFromReply('直接说「显示《某篇日记》的附件」即可').length === 0,
+    JSON.stringify(ctx._suggestFromReply('直接说「显示《某篇日记》的附件」即可')))
+  // 没附件的日记不能生成调图按钮：点了只能回"确实没有存附件"，等于又骗用户点一次
+  check('无附件日记不生成调图按钮', ctx._suggestFromReply('你可以打开《水电验收》看看').length === 0,
+    JSON.stringify(ctx._suggestFromReply('你可以打开《水电验收》看看')))
   check('非日记的引号词不生成按钮', ctx._suggestFromReply('通用建议：先看「通用建议」这一条').length === 0, JSON.stringify(ctx._suggestFromReply('通用建议：先看「通用建议」这一条')))
   check('无引号回答不生成按钮', ctx._suggestFromReply('目前装修到水电阶段').length === 0)
   check('最多 3 条', ctx._suggestFromReply('可说「录入材料 瓷砖」「录入花费 200」「记一篇日记」「把准备阶段改为进行中」').length === 3)
@@ -491,6 +503,18 @@ async function round2() {
   const up = feedbackLogs.filter((x) => x.signal === 'unparsed')[0]
   check('录入但抽不出字段 → 记 unparsed', !!up, JSON.stringify(feedbackLogs.map((x) => x.signal)))
   check('unparsed 带意图 + 原文', up && up.intent === 'material' && up.question === '录入材料', JSON.stringify(up))
+
+  console.log('\n=== T. 附件打不开必须可诊断（网络抖动留下的坏 fileID） ===')
+  // 症状：库里 image_paths 有值 → 列表显示「📷 有附件」，但云存储取不到 → 详情页/AI 都是空白。
+  // 旧实现只说"链接获取失败（未知原因）"，用户只能猜；现在要说清数量、原因和该做什么。
+  const origSigned = cloudImpl.storage.createSignedUrls
+  cloudImpl.storage.createSignedUrls = async () => ({ data: [], error: { message: '文件不存在或无权限', failedCount: 6, okCount: 0 } })
+  const broken = await ctx._handleDiaryLookup('显示《土建进场日记 999》的附件')
+  cloudImpl.storage.createSignedUrls = origSigned
+  check('取不到链接 → 说清"打不开"', !!(broken && broken.text.indexOf('打不开') !== -1), JSON.stringify(broken && broken.text))
+  check('取不到链接 → 带上具体原因', !!(broken && broken.text.indexOf('文件不存在或无权限') !== -1))
+  check('取不到链接 → 带上失败数量', !!(broken && broken.text.indexOf('6 个附件') !== -1), JSON.stringify(broken && broken.text))
+  check('取不到链接 → 给出动作（重新上传）', !!(broken && broken.text.indexOf('重新上传') !== -1))
 
   // S8 埋点失败绝不影响主流程（log 抛错也要能继续录入）
   const origLog = stubAiFeedback.log
