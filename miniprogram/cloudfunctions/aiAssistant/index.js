@@ -1,0 +1,286 @@
+const cloud = require('wx-server-sdk')
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+
+const https = require('https')
+const { URL } = require('url')
+
+// V1.4 家庭装修 AI 管家：
+// - 输入：用户问题 + 客户端拼装的「项目数据快照」(snapshot)，snapshot 结构见 buildContextText()
+// - 策略：客户端先读 diaries/expenses/materials/stages/rooms（已受 access.myMembers 隔离）
+//         拼成快照传上来，云函数无需再做权限校验；
+//         客户端未传快照时，备用：通过 projectId 服务端拉
+// - 降级：LLM 未配/失败 → 返回纯文本「项目现状摘要」，前端直接展示
+//
+// 上下文工程：把每个领域的核心 KPI 压成短句而非塞 JSON，
+// 日记/材料按房间分桶，让模型能精准回答「主卧做了什么」「水电多少钱」之类问题。
+
+function httpJson({ method = 'GET', url, headers = {}, body }) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const data = body ? JSON.stringify(body) : null
+    const req = https.request(
+      {
+        hostname: u.hostname, port: u.port || 443, path: u.pathname + u.search, method,
+        headers: {
+          'User-Agent': 'Mozilla/5.0', ...headers,
+          ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}),
+        },
+      },
+      (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return resolve(httpJson({ method, url: new URL(res.headers.location, url).toString(), headers, body }))
+        }
+        let buf = ''
+        res.on('data', (c) => (buf += c))
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            let msg = buf.slice(0, 300)
+            try { msg = (JSON.parse(buf).error || {}).message || msg } catch (e) {}
+            return reject(new Error('HTTP ' + res.statusCode + ' ' + msg))
+          }
+          try { resolve(JSON.parse(buf)) } catch (e) { reject(new Error('bad json: ' + buf.slice(0, 160))) }
+        })
+      }
+    )
+    req.on('error', reject)
+    // 13s 截止：客户端 callFunction 默认 ~15s，函数必须先于它返回；超时走「快照摘要」降级
+    req.setTimeout(13000, () => req.destroy(new Error('大模型请求超时')))
+    if (data) req.write(data)
+    req.end()
+  })
+}
+
+function normalizeBase(raw) {
+  let s = String(raw || '').trim().replace(/\/+$/, '')
+  if (!s) return ''
+  if (/^https?:\/\//i.test(s)) {
+    if (!/chat\/completions$/i.test(s)) s += '/chat/completions'
+    return s
+  }
+  return 'https://' + s + '/chat/completions'
+}
+
+// LLM 配置：app_settings 集合优先（管理端独占），未配置回退环境变量；集合读失败一律回退 env，不阻断
+async function getLLMConfig() {
+  try {
+    const r = await cloud.database().collection('app_settings').where({ key: 'llm' }).limit(1).get()
+    const d = r.data && r.data[0]
+    if (d && d.api_key && d.base_url) {
+      return { base: normalizeBase(d.base_url), key: String(d.api_key).trim(), model: String(d.model || 'deepseek-chat').trim() }
+    }
+  } catch (e) { /* 集合不存在等 → 回退环境变量 */ }
+  const base = normalizeBase(process.env.LLM_BASE_URL)
+  const key = String(process.env.LLM_API_KEY || '').trim()
+  const model = String(process.env.LLM_MODEL || 'deepseek-chat').trim()
+  return base && key ? { base, key, model } : null
+}
+
+// 服务端兜底拉取：客户端未带 snapshot 时用此拉全量去构造 context
+async function fetchSnapshot(projectId) {
+  const db = cloud.database()
+  const [stages, rooms, diaries, materials, expenses] = await Promise.all([
+    db.collection('stages').where({ project_id: projectId }).limit(50).get(),
+    db.collection('rooms').where({ project_id: projectId }).limit(100).get(),
+    db.collection('diaries').where({ project_id: projectId, deleted: { $ne: true } }).order('updated_at', 'desc').limit(15).get(),
+    db.collection('materials').where({ project_id: projectId }).limit(200).get(),
+    db.collection('expenses').where({ project_id: projectId, deleted: { $ne: true } }).limit(500).get(),
+  ])
+  return {
+    stages: stages.data || [],
+    rooms: rooms.data || [],
+    diaries: diaries.data || [],
+    materials: materials.data || [],
+    expenses: expenses.data || [],
+  }
+}
+
+// 把 snapshot 各字段整理成利于 LLM 理解的纯文本（含可直读的 KPI）
+//   - 防 LLM「跨字段植入」：所有 ID 一律转中文名（房间/阶段）
+//   - 日记正文限长 200 字/条，避免 prompt 过长触发 token 限
+function buildContextText(snap) {
+  const lines = []
+  if (snap.projectName) lines.push('项目名称：' + snap.projectName)
+  // —— 阶段全景 ——
+  const stages = snap.stages || []
+  if (stages.length) {
+    lines.push('')
+    lines.push('【施工阶段（共 ' + stages.length + ' 段）】')
+    const counts = { pending: 0, doing: 0, done: 0 }
+    stages.forEach((s) => { counts[s.status || 'pending'] = (counts[s.status || 'pending'] || 0) + 1 })
+    lines.push('未开始 ' + counts.pending + ' / 进行中 ' + counts.doing + ' / 已完成 ' + counts.done)
+    stages.forEach((s) => {
+      lines.push('- ' + s.name + '（' + statusName(s.status) + '，' +
+        (s.start_date ? '起 ' + s.start_date : '未开工') +
+        (s.end_date ? ' / 止 ' + s.end_date : '') + '）')
+    })
+  }
+  // —— 房间 ——
+  const rooms = snap.rooms || []
+  if (rooms.length) {
+    lines.push('')
+    lines.push('【房间清单（' + rooms.length + ' 个）】')
+    rooms.forEach((r) => lines.push('- ' + r.name))
+  }
+  // —— 花费 ——
+  const expenses = snap.expenses || {}
+  if (expenses && (expenses.total != null || expenses.byType || expenses.byStage)) {
+    lines.push('')
+    lines.push('【花费汇总】')
+    if (expenses.total != null) lines.push('已花费合计：' + yuan(expenses.total) + ' 元')
+    if (expenses.thisMonth != null) lines.push('本月新增：' + yuan(expenses.thisMonth) + ' 元')
+    if (Array.isArray(expenses.byType) && expenses.byType.length) {
+      lines.push('按类目：' + expenses.byType.map((t) => t.name + ' ' + yuan(t.total)).join('；'))
+    }
+    if (Array.isArray(expenses.byStage) && expenses.byStage.length) {
+      lines.push('按阶段：' + expenses.byStage.map((t) => (t.name || '通用') + ' ' + yuan(t.total)).join('；'))
+    }
+  }
+  // —— 材料 ——
+  const materials = snap.materials || {}
+  if (materials && (materials.totals || materials.byStatus || materials.byRoom)) {
+    lines.push('')
+    lines.push('【材料清单】')
+    if (materials.totals) {
+      lines.push('共 ' + materials.totals.count + ' 项，总计划 ' + yuan(materials.totals.planned) + ' 元，已购 ' +
+        yuan(materials.totals.bought) + ' 元，待购 ' + yuan(materials.totals.tobuy) + ' 元')
+    }
+    if (Array.isArray(materials.byStatus) && materials.byStatus.length) {
+      lines.push('状态分布：' + materials.byStatus.map((s) => s.name + ' ' + s.count + ' 项').join('；'))
+    }
+    if (Array.isArray(materials.byRoom) && materials.byRoom.length) {
+      lines.push('按房间：' + materials.byRoom.map((r) => (r.room || '未分配') + ' ' + r.count + '项·' + yuan(r.total)).join('；'))
+    }
+    if (Array.isArray(materials.boughtList) && materials.boughtList.length) {
+      lines.push('已购清单（' + materials.boughtList.length + ' 条）：')
+      materials.boughtList.slice(0, 30).forEach((m) => {
+        lines.push('- ' + m.name + (m.room ? '（' + m.room + '）' : '') + ' ' + yuan(m.total))
+      })
+    }
+  }
+  // —— 日记（按房间分桶，让问题「主卧有什么」能直接命中）——
+  const diaries = snap.diaries || []
+  if (diaries.length) {
+    lines.push('')
+    lines.push('【最近 ' + diaries.length + ' 条日记（按更新时间倒序）】')
+    const byRoom = {}
+    diaries.forEach((d) => {
+      const k = (d.roomNames && d.roomNames.length) ? d.roomNames.join('/') : '未指定房间'
+      if (!byRoom[k]) byRoom[k] = []
+      byRoom[k].push(d)
+    })
+    Object.keys(byRoom).forEach((roomName) => {
+      lines.push('房间【' + roomName + '】共 ' + byRoom[roomName].length + ' 条：')
+      byRoom[roomName].slice(0, 8).forEach((d) => {
+        const tail = (d.content || '').replace(/\s+/g, ' ').slice(0, 200)
+        const stage = d.stageNames && d.stageNames.length ? ' · 阶段:' + d.stageNames.join('/') : ''
+        lines.push('- ' + (d.diary_date || '') + ' · ' + (d.title || '无标题') + stage + '：' + tail)
+      })
+    })
+  }
+  return lines.join('\n')
+}
+
+function statusName(s) {
+  return ({ pending: '未开始', doing: '进行中', done: '已完成' }[s] || '未开始')
+}
+function yuan(n) {
+  const v = Math.round(Number(n || 0) / 100)
+  if (!v) return '0'
+  return v.toLocaleString('zh-CN')
+}
+
+async function callLLM(context, question) {
+  const cfg = await getLLMConfig()
+  if (!cfg) return null
+  const prompt = [
+    '以下是用户当前装修项目的真实数据快照（按需参考）：',
+    context,
+    '',
+    '用户问题：' + question,
+    '',
+    '回答要求：',
+    '- 中文。先给一句直接的结论或当下判断，再展开说明；',
+    '- 紧贴项目数据回答：被问「现在到哪个阶段」就根据阶段状态列表点名；问「主卧做了什么」就只摘主卧相关的日记/材料；',
+    '- 涉及下一步建议，可结合可靠的装修常识，但要有「通用建议：」标注是常识补充；',
+    '- 数据未覆盖的细节（具体房间未记日记、材料未关联房间等）直接说明，不要编造；',
+    '- 涉及安全（防水/水电/燃气/承重）提醒找专业人士现场确认；',
+    '- 总篇幅 200-450 字；若是「风险/下一步」类问题可用条目列。',
+  ].join('\n')
+  const j = await httpJson({
+    method: 'POST',
+    url: cfg.base,
+    headers: { Authorization: 'Bearer ' + cfg.key },
+    body: {
+      model: cfg.model,
+      messages: [
+        { role: 'system', content: '你是用户的家庭装修管家，记得用户当前项目的所有「现场真实数据」。回答必须基于数据，没有依据的细节不要瞎编；务实、对装修小白友好、可执行。' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.4,
+      max_tokens: 800, // 数据上下文较长，给回答留更多 token；客户端 15s 兜底由 13s http 截止保
+      stream: false,
+    },
+  })
+  const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content
+  return txt ? String(txt).trim() : null
+}
+
+exports.main = async (event) => {
+  const { question } = event || {}
+  const q = String(question || '').trim()
+  if (!q) return { ok: false, message: '请输入要问的问题' }
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext && wxContext.OPENID
+  if (!openid) return { ok: false, message: '未登录' }
+
+  let snap = event && event.snapshot
+  // 客户端未传 snapshot 时尝试服务端拉（仅当传了 projectId 且不在高并发场景）
+  if ((!snap || !snap.stages) && event && event.projectId) {
+    try {
+      const raw = await fetchSnapshot(event.projectId)
+      snap = {
+        projectName: event.projectName || '',
+        stages: (raw.stages || []).map((s) => ({ name: s.name, status: s.status || 'pending', start_date: s.start_date || '', end_date: s.end_date || '' })),
+        rooms: (raw.rooms || []).map((r) => ({ name: r.name })),
+        diaries: (raw.diaries || []).map((d) => ({ title: d.title, diary_date: d.diary_date, content: d.content || '', roomNames: [], stageNames: [] })),
+        expenses: { total: (raw.expenses || []).reduce((s, x) => s + Number(x.amount || 0), 0) },
+        materials: { totals: { count: (raw.materials || []).length, planned: 0, bought: 0, tobuy: 0 } },
+      }
+    } catch (e) { /* 拉失败也继续，context 可能为空 */ }
+  }
+  if (!snap) snap = {}
+  const context = buildContextText(snap)
+
+  let answer = null
+  let ai = false
+  let aiError = ''
+  try {
+    answer = await callLLM(context, q)
+    ai = !!answer
+  } catch (e) {
+    aiError = String((e && e.message) || e)
+  }
+  if (!answer) answer = fallbackFromSnapshot(snap, q)
+  return { ok: true, answer, ai, aiError, contextText: context, projectName: snap.projectName || '' }
+}
+
+// 降级：直接基于 snapshot 拼一段「项目现状摘要」，作为 LLM 不可用时的兜底
+function fallbackFromSnapshot(snap, q) {
+  const lines = ['AI 当前不可用，这是你项目的现状速览：']
+  if (snap.stages && snap.stages.length) {
+    const counts = { pending: 0, doing: 0, done: 0 }
+    snap.stages.forEach((s) => { counts[s.status || 'pending']++ })
+    const doingName = snap.stages.find((s) => s.status === 'doing')
+    lines.push('· 阶段：共 ' + snap.stages.length + ' 段（未开始 ' + counts.pending + ' / 进行中 ' + counts.doing + ' / 已完成 ' + counts.done + '）' +
+      (doingName ? '，当前进行中：' + doingName.name : '，当前没有正在进行的阶段'))
+  }
+  if (snap.expenses && snap.expenses.total != null) lines.push('· 已花费合计：' + yuan(snap.expenses.total) + ' 元')
+  if (snap.materials && snap.materials.totals) {
+    lines.push('· 材料：共 ' + snap.materials.totals.count + ' 项，待购 ' + yuan(snap.materials.totals.tobuy) + ' 元、已购 ' + yuan(snap.materials.totals.bought) + ' 元')
+  }
+  if (snap.diaries && snap.diaries.length) {
+    lines.push('· 最近日记：' + snap.diaries.length + ' 条（最近：' + (snap.diaries[0].diary_date || '') + ' · ' + (snap.diaries[0].title || '') + '）')
+  }
+  if (q) lines.push('')
+  return lines.join('\n')
+}

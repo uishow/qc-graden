@@ -1,0 +1,70 @@
+<view class="page-root {{theme}} chat-page">
+  <scroll-view class="chat-body" scroll-y scroll-into-view="{{lastId}}" scroll-with-animation>
+    <!-- 顶部：项目快照卡（默认展开，含建议问题） -->
+    <view class="card snap-card">
+      <view class="between">
+        <view class="snap-title">📌 当前项目速览</view>
+        <view class="muted snap-toggle" bindtap="toggleSnap">{{snapCollapsed ? '展开 ▾' : '收起 ▴'}}</view>
+      </view>
+      <view wx:if="{{snapReady}}">
+        <view class="snap-line"><text class="snap-k">项目：</text>{{snapshot.projectName || '—'}}</view>
+        <view class="snap-line"><text class="snap-k">阶段：</text>{{snapshot.stagesText || '尚未设置'}}</view>
+        <view wx:if="{{!snapCollapsed}}">
+          <view class="snap-line"><text class="snap-k">已花费：</text>{{snapshot.spentText}} <text class="snap-k">本月：</text>{{snapshot.monthText}}</view>
+          <view class="snap-line"><text class="snap-k">材料：</text>{{snapshot.materialsText}}</view>
+          <view class="snap-line"><text class="snap-k">房间：</text>{{snapshot.roomsText}} <text class="snap-k">日记：</text>{{snapshot.diariesText}}</view>
+        </view>
+      </view>
+      <view wx:else class="muted" style="margin-top:8rpx">正在加载项目数据…</view>
+
+      <view wx:if="{{!snapCollapsed}}" class="snap-sug">
+        <view class="snap-sug-title muted">试试问我：</view>
+        <view class="snap-sug-wrap">
+          <view class="snap-sug-chip" bindtap="sendSuggest" data-q="我现在装修到哪个阶段了？">📍 当前阶段</view>
+          <view class="snap-sug-chip" bindtap="sendSuggest" data-q="我下一步该干啥了？">➡️ 下一步</view>
+          <view class="snap-sug-chip" bindtap="sendSuggest" data-q="目前装修进度有哪些风险？">⚠️ 风险点</view>
+          <view class="snap-sug-chip" bindtap="sendSuggest" data-q="看一看{{firstRoom || '主卧'}}做了哪些装修？">🛏️ 看主卧</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态：欢迎 + 提示 -->
+    <view wx:if="{{messages.length === 0 && snapReady}}" class="chat-empty">
+      <view class="empty-avatar">🤖</view>
+      <view class="empty-title">装修管家 AI</view>
+      <view class="empty-sub muted">已读完你项目里的真实数据；提个具体问题，能答得更准。</view>
+    </view>
+
+    <view wx:for="{{messages}}" wx:key="index" id="msg{{index}}" class="msg-row {{item.role === 'user' ? 'me' : 'ai'}}">
+      <view wx:if="{{item.role !== 'user'}}" class="avatar">🤖</view>
+      <view class="msg-col">
+        <view class="bubble {{item.role === 'user' ? 'bubble-me' : 'bubble-ai'}}">{{item.text}}</view>
+      </view>
+    </view>
+
+    <!-- 等待回复：三呼吸点 -->
+    <view wx:if="{{loading}}" class="msg-row ai">
+      <view class="avatar">🤖</view>
+      <view class="msg-col">
+        <view class="bubble bubble-ai typing">
+          <text class="dot d1">●</text><text class="dot d2">●</text><text class="dot d3">●</text>
+        </view>
+      </view>
+    </view>
+    <view style="height:24rpx"></view>
+  </scroll-view>
+
+  <!-- 输入条（键盘弹起抬升：margin-bottom = kbHeight） -->
+  <view class="chat-input" style="margin-bottom:{{kbHeight}}px">
+    <input
+      class="chat-input-field"
+      value="{{input}}"
+      confirm-type="send"
+      adjust-position="{{false}}"
+      placeholder="问你的装修管家…"
+      bindinput="onInput"
+      bindconfirm="send"
+    />
+    <view class="send-btn {{loading || !input ? 'send-disabled' : ''}}" bindtap="send">发送</view>
+  </view>
+</view>

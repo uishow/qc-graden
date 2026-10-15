@@ -1,0 +1,9 @@
+{
+  "name": "aiAssistant",
+  "version": "1.0.0",
+  "description": "家庭装修 AI 管家：基于项目数据快照问答；复用 app_settings LLM 统一配置",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}
