@@ -2,6 +2,7 @@ const { cloud } = require('../../utils/cloud')
 const store = require('../../utils/store')
 const access = require('../../utils/access')
 const { tagsOf, normalizeIds } = require('../../utils/arrayId')
+const write = require('../../utils/write')
 
 // —— 金额分→元（带千分位） ——
 function fen2yuan(fen, withComma) {
@@ -242,12 +243,140 @@ Page({
     this.setData({ input: q }, () => this.send(q))
   },
 
+  // —— 2026-10-15 录入材料指令解析：识别「录入/添加/记一笔」+ 材料名 + 数量 + 单价/总价 ——
+  // 返回 { name, quantity, unit, unit_price (分), total_price (分), note, original } 或 null
+  // 解析失败返回 null（不消费消息，让正常 LLM 路径处理）
+  tryParseIntakeMaterial(text) {
+    // 必须有「录入/添加/记一笔/登记/加一笔」之一 + 可选「材料/材料清单/建材」
+    // 注意：不要在 head 里强制 \s+，因为「录入材料清单，欧派木门...」里中文逗号「，」紧跟正文没空白，会整句不匹配
+    // alternation 中把更长的「材料清单」放最左，否则「材料」先吃掉剩「清单」在 body
+    const head = text.match(/(?:^|\s)(?:录入|添加|记一笔|登记|加一笔)\s*(?:材料清单|材料|建材)?\s*/)
+    if (!head) return null
+    let body = text.slice(head[0].length).replace(/^[\s，,：:、]+/, '').trim()
+    if (!body) return null
+
+    // 单位表覆盖常见装修材料单位
+    // ★ alternation 必须把更长的组合单位（平方/平米）放最左，否则「5 平方」会被拆成「5 平」+「方...」
+    const unitList = '平方|平米|张|个|件|块|套|片|根|米|条|箱|包|盒|双|对|扇|台|把|只|卷|桶|本'
+    // 数量：支持阿拉伯 + 中文数字
+    const cnNum = { '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 }
+    const qtyRe = new RegExp(`(\\d+|${Object.keys(cnNum).join('|')})\\s*(${unitList})`)
+    const qtyMatch = body.match(qtyRe)
+    if (!qtyMatch) return null
+    const qtyRaw = qtyMatch[1]
+    const quantity = /^\d+$/.test(qtyRaw) ? Number(qtyRaw) : cnNum[qtyRaw]
+    const unit = qtyMatch[2]
+    if (!quantity || quantity <= 0) return null
+
+    // 单价：4 种优先级
+    //   A) 「(单价)? 数字 (元/块)? (/?每/一)?单位」 连续段：300 一张 / 单价300一张 / 300元一张 / 80元/桶 / 每张 300
+    //   B) 「每 单位 数字」：每张 300 / 每套 150
+    //   C) 裸「数字 元/块」（无单位兜底）：250元
+    //   D) 总价：共/一共/总共/合计/总价/花 数字 元 → 推单价 = total / quantity
+    // **只在 qty 之后找**，避免把 qty 自身当成价格
+    // 注意：unitRe 用 alternation（不是字符类），让「平方/平米」优先于「平/米」匹配
+    const afterQty = body.slice(qtyMatch.index + qtyMatch[0].length)
+    // 数字与单位之间允许「一/每/」连接" "
+    const priceReA = new RegExp(`(?:单价\\s*)?(\\d+(?:\\.\\d+)?)\\s*(?:元|块|块钱)?\\s*[/一每]?\\s*(?:${unitList})`, 'i')
+    const priceReB = new RegExp(`每\\s*(?:${unitList})\\s*(\\d+(?:\\.\\d+)?)\\s*(?:元|块|块钱)?`, 'i')
+    const priceReC = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/
+    let aMatch = afterQty.match(priceReA) || afterQty.match(priceReB)
+    if (!aMatch) aMatch = afterQty.match(priceReC)
+    // ★ 「共/一共/总共/合计/总价/花了」是总价强信号，必须先于裸 priceReC 命中，避免把总价当成单价
+    const bMatch = body.match(/(共|一共|总共|合计|总价|花了|花)\s*(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/i)
+    let unitPriceFen = 0
+    if (bMatch) {
+      const totalFen = Math.round(Number(bMatch[2]) * 100)
+      unitPriceFen = Math.round(totalFen / quantity)
+    } else if (aMatch) {
+      unitPriceFen = Math.round(Number(aMatch[1]) * 100)
+    }
+
+    // 名字 = body 去掉数量/价格/常见修饰
+    // 顺序：先剥长的 bMatch「共/一共/总共...」再剥短的 aMatch，避免部分匹配导致长串残留
+    let name = body
+    if (bMatch) name = name.replace(bMatch[0], ' ')
+    name = name.replace(qtyMatch[0], ' ')
+    if (aMatch) name = name.replace(aMatch[0], ' ')
+    // 修饰匹配：必须命中"要求/本周/周X/上门/送货/安装/到货"至少一个
+    name = name.replace(/(要求|本(?:周|个)?[日一二三四五六天]?|下周[日一二三四五六天]?|上门|送货|安装|到货|到现场)[^,，。.]*/g, ' ')
+    // 裸「共/一共/总价/合计」若 bMatch 没命中（比如后面没跟数字）作为孤立修饰剥掉
+    name = name.replace(/(?:^|\s)(?:一共|总共|合计|总价)(?:\s|$)/g, ' ')
+    name = name.replace(/[，,。.；;]+/g, ' ')
+    name = name.replace(/\s+/g, ' ')
+    .trim()
+    if (!name || name.length < 2) return null
+
+    return {
+      name,
+      quantity,
+      unit,
+      unit_price: unitPriceFen,
+      total_price: unitPriceFen * quantity,
+      note: text.trim(),
+      original: text.trim(),
+    }
+  },
+
+  // 处理材料录入：write.insert + 构造成功/失败回复
+  async _handleIntakeMaterial(intake) {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return '当前没有项目，无法录入。'
+    try {
+      const data = {
+        name: intake.name,
+        category: '其他',
+        brand: '',
+        spec: '',
+        quantity: intake.quantity,
+        unit: intake.unit,
+        unit_price: intake.unit_price,
+        total_price: intake.total_price,
+        planned_price: intake.total_price,
+        status: 'to_buy',
+        note: intake.note,
+      }
+      const r = await write.insert('materials', projectId, { ...data, version: 1, project_id: projectId })
+      if (r && r.error) {
+        return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
+      }
+      const totalYuan = (intake.total_price / 100).toFixed(2)
+      const unitYuan = (intake.unit_price / 100).toFixed(2)
+      const lines = [
+        '✅ 已录入材料清单：',
+        `· 名称：${intake.name}`,
+        `· 数量：${intake.quantity} ${intake.unit}` + (intake.unit_price > 0 ? `（单价 ¥${unitYuan}，合计 ¥${totalYuan}）` : ''),
+        `· 状态：待购`,
+        `· 备注：${intake.note}`,
+        '',
+        '💡 在「花费 → 材料清单」可编辑（加品牌/规格/状态推进）。',
+      ]
+      return lines.join('\n')
+    } catch (e) {
+      return '录入失败：' + (e.errMsg || e.message || '未知错误')
+    }
+  },
+
   async send(src) {
     const text = String(typeof src === 'string' ? src : this.data.input || '').trim()
     if (!text || this.data.loading) return
     const messages = this.data.messages.concat([{ role: 'user', text }])
     this.setData({ messages, input: '', loading: true, lastId: 'msg' + (messages.length - 1) })
     const projectId = store.getCurrentProjectId()
+
+    // ★ 2026-10-15：系统数据录入快捷指令（「录入材料：欧派木门 3 张 300/张」）
+    //   不走 LLM，直接正则解析 + write.insert('materials')，把结果作为 AI 回复气泡
+    //   让 LLM 不可用 / 未配置时也能录入；后续如要做日记/花费等再扩
+    if (projectId) {
+      const intake = tryParseIntakeMaterial(text)
+      if (intake) {
+        const reply = await this._handleIntakeMaterial(intake)
+        const next = this.data.messages.concat([{ role: 'ai', text: reply }])
+        this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })
+        return
+      }
+    }
+
     let result = null
     try {
       const res = await wx.cloud.callFunction({
