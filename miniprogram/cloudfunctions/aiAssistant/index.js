@@ -173,7 +173,8 @@ function buildContextText(snap) {
       byRoom[roomName].slice(0, 8).forEach((d) => {
         const tail = (d.content || '').replace(/\s+/g, ' ').slice(0, 200)
         const stage = d.stageNames && d.stageNames.length ? ' · 阶段:' + d.stageNames.join('/') : ''
-        lines.push('- ' + (d.diary_date || '') + ' · ' + (d.title || '无标题') + stage + '：' + tail)
+        const att = d.hasImage ? ' · 📷有附件' : ''
+        lines.push('- ' + (d.diary_date || '') + ' · ' + (d.title || '无标题') + stage + att + '：' + tail)
       })
     })
   }
@@ -203,6 +204,7 @@ async function callLLM(context, question) {
     '- 紧贴项目数据回答：被问「现在到哪个阶段」就根据阶段状态列表点名；问「主卧做了什么」就只摘主卧相关的日记/材料；',
     '- 涉及下一步建议，可结合可靠的装修常识，但要有「通用建议：」标注是常识补充；',
     '- 数据未覆盖的细节（具体房间未记日记、材料未关联房间等）直接说明，不要编造；',
+    '- 日记条目标了「📷有附件」的表示存有图片；用户想看图时，引导他说「显示 XX 那篇日记的附件/图片」，系统会直接把图调出来；',
     '- 涉及安全（防水/水电/燃气/承重）提醒找专业人士现场确认；',
     '- 总篇幅 200-450 字；若是「风险/下一步」类问题可用条目列。',
   ].join('\n')
