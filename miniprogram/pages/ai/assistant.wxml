@@ -38,7 +38,23 @@
     <view wx:for="{{messages}}" wx:key="index" id="msg{{index}}" class="msg-row {{item.role === 'user' ? 'me' : 'ai'}}">
       <view wx:if="{{item.role !== 'user'}}" class="avatar">🤖</view>
       <view class="msg-col">
-        <view class="bubble {{item.role === 'user' ? 'bubble-me' : 'bubble-ai'}}">{{item.text}}</view>
+        <view class="bubble {{item.role === 'user' ? 'bubble-me' : 'bubble-ai'}}">
+          <text>{{item.text}}</text>
+          <view wx:if="{{item.images && item.images.length}}" class="bubble-imgs">
+            <image
+              wx:for="{{item.images}}"
+              wx:for-item="img"
+              wx:for-index="imgIdx"
+              wx:key="imgIdx"
+              class="bubble-img"
+              src="{{img}}"
+              mode="aspectFill"
+              data-imgs="{{item.images}}"
+              data-cur="{{img}}"
+              bindtap="previewMsgImage"
+            />
+          </view>
+        </view>
       </view>
     </view>
 

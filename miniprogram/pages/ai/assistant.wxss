@@ -80,6 +80,18 @@
   40% { opacity: 1; }
 }
 
+/* 气泡内附件图片（日记附件查询结果） */
+.bubble-imgs {
+  display: flex; flex-wrap: wrap; gap: 10rpx;
+  margin-top: 12rpx;
+}
+.bubble-img {
+  width: 200rpx; height: 200rpx;
+  border-radius: 12rpx;
+  background: var(--c-secondary-bg);
+}
+.bubble-img:active { opacity: 0.85; }
+
 /* 输入条 */
 .chat-input {
   flex-shrink: 0;

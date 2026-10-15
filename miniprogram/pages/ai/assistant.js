@@ -478,6 +478,7 @@ Page({
       }
       const totalYuan = (intake.total_price / 100).toFixed(2)
       const unitYuan = (intake.unit_price / 100).toFixed(2)
+      this._afterEntryJump('material') // 成功后自动跳「花费」tab（材料清单在其中）
       const lines = [
         '✅ 已录入材料清单：',
         `· 名称：${intake.name}`,
@@ -485,7 +486,7 @@ Page({
         `· 状态：待购`,
         `· 备注：${intake.note}`,
         '',
-        '💡 在「花费 → 材料清单」可编辑（加品牌/规格/状态推进）。',
+        '💡 即将跳到「花费 · 材料清单」，可加规格/推进状态。',
       ]
       return lines.join('\n')
     } catch (e) {
@@ -513,7 +514,7 @@ Page({
   // —— 意图识别：材料 / 花费 / 日记 / null（非录入）——
   detectIntent(text) {
     const t = String(text || '')
-    const isQuestion = /[?？]|怎么|如何|为什么|为何|啥|哪|多少|几|查询|统计|分析|看看|吗\s*$|呢\s*$/.test(t)
+    const isQuestion = /[?？]|怎么|如何|为什么|为何|啥|哪|多少|几|查询|统计|分析|看看|显示|展示|找出|找一下|打开|搜一下|搜索|发我|发出来|吗\s*$|呢\s*$/.test(t)
     const hasMat = /录入|添加|登记|加一笔|材料|建材|清单/.test(t)
     const hasDiary = /记日记|写日记|记一篇日记|记录日记|日记(?!本)/.test(t)
     const hasExp = /记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了|花\b/.test(t)
@@ -534,25 +535,50 @@ Page({
   },
 
   // —— 花费解析：金额(分) + 类型 + 支付日期 + 阶段 + 备注 ——
+  // 健壮性（与材料品牌解析同思路）：
+  //   ① 显式声明字段优先：备注/说明/事由 → remark；类型/类别 → type
+  //   ② 金额多形态：「500元」「花了500」「金额：500」
+  //   ③ 声明短语从 remark 清理出去，避免泄漏
   tryParseExpense(text) {
+    // 显式备注：备注/说明/事由 后的内容（截止到逗号/句末/下一个字段关键词）
+    const remarkDecl = text.match(/(?:备注|说明|事由)\s*(?:是|[:：])?\s*([^，。；;]*)/)
+    let declaredRemark = ''
+    if (remarkDecl && remarkDecl[1]) {
+      declaredRemark = remarkDecl[1].split(/\s*(?:阶段|类型|类别|日期|支付)\s*(?:是|[:：])?\s*/)[0].trim()
+    }
+    // 显式类型：类型/类别 是/： 人工|设计|订金|定金|材料|其他
+    const typeDecl = text.match(/(?:类型|类别)\s*(?:是|[:：])?\s*(人工|设计|订金|定金|材料|其他)/)
+
+    // 金额：优先「数字元/块」，其次「花了500」「金额：500」（省略元）
     const amtRe = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/
-    const m = text.match(amtRe)
+    const m = text.match(amtRe) || text.match(/(?:花了|金额)\s*[:：]?\s*(\d+(?:\.\d+)?)/)
     if (!m) return null
     const amountFen = Math.round(Number(m[1]) * 100)
     if (!amountFen) return null
     let type = 'other'
-    if (/人工|工钱|工人|师傅/.test(text)) type = 'labor'
+    if (typeDecl) {
+      type = { 人工: 'labor', 设计: 'design', 订金: 'deposit', 定金: 'deposit', 材料: 'material', 其他: 'other' }[typeDecl[1]] || 'other'
+    } else if (/人工|工钱|工人|师傅/.test(text)) type = 'labor'
     else if (/设计/.test(text)) type = 'design'
     else if (/订金|定金|预付款/.test(text)) type = 'deposit'
+    else if (/材料/.test(text)) type = 'material'
     const payDate = parseDateFromText(text)
     const stageIds = this._matchStageIds(text)
-    let remark = text
-    remark = remark.replace(amtRe, ' ')
-    remark = remark.replace(/(人工|工钱|工人|师傅|设计|订金|定金|预付款|花费|支出|付款|付了|报销|开支|消费|记一笔|记一下|花)/g, ' ')
-    remark = remark.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
-    ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
-    ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
-    remark = remark.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+    // 备注：显式声明优先；否则从原文剥离金额/类型词/日期/房间阶段名
+    let remark
+    if (declaredRemark) {
+      remark = declaredRemark
+    } else {
+      remark = text
+      remark = remark.replace(amtRe, ' ')
+      remark = remark.replace(/(花了|金额)\s*[:：]?\s*(\d+(?:\.\d+)?)/g, ' ')
+      remark = remark.replace(/(备注|说明|事由|类型|类别)\s*(?:是|[:：])?/g, ' ')
+      remark = remark.replace(/(人工|工钱|工人|师傅|设计|订金|定金|预付款|花费|支出|付款|付了|报销|开支|消费|记一笔|记一下|花)/g, ' ')
+      remark = remark.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
+      ;(this.data.snapshot.stages || []).forEach((s) => { const n = String(s.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
+      ;(this.data.snapshot.rooms || []).forEach((r) => { const n = String(r.name || '').trim(); if (n && n.length >= 2) remark = remark.split(n).join(' ') })
+      remark = remark.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
+    }
     return { amount: amountFen, type, pay_date: payDate, stage_ids: stageIds, remark, original: text.trim() }
   },
 
@@ -618,7 +644,8 @@ Page({
       }
       const r = await write.insert('expenses', projectId, { ...data, version: 1, project_id: projectId, deleted: false })
       if (r && r.error) return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
-      const typeName = { labor: '人工', design: '设计', deposit: '订金/定金', other: '其他' }[intake.type] || '其他'
+      const typeName = { labor: '人工', design: '设计', deposit: '订金/定金', other: '其他', material: '材料' }[intake.type] || '其他'
+      this._afterEntryJump('expense') // 成功后自动跳「花费」tab
       const lines = [
         '✅ 已录入花费：',
         `· 金额：¥${(intake.amount / 100).toFixed(2)}（${typeName}）`,
@@ -626,7 +653,7 @@ Page({
         (intake.stage_ids && intake.stage_ids.length) ? '· 已关联阶段' : '',
         intake.remark ? `· 备注：${intake.remark}` : '',
         '',
-        '💡 在「花费」页可查看与编辑。',
+        '💡 即将跳到「花费」页查看。',
       ].filter(Boolean)
       return lines.join('\n')
     } catch (e) {
@@ -653,6 +680,7 @@ Page({
         created_at: now, updated_at: now,
       })
       if (r && r.error) return '录入失败：' + (r.error.message || r.error.errMsg || '未知错误')
+      this._afterEntryJump('diary') // 成功后自动跳「日记」tab
       const lines = [
         '✅ 已录入日记：',
         `· 标题：${intake.title}`,
@@ -660,7 +688,7 @@ Page({
         (intake.room_ids && intake.room_ids.length) ? '· 已关联房间' : '',
         (intake.stage_ids && intake.stage_ids.length) ? '· 已关联阶段' : '',
         '',
-        '💡 在「日记」页可查看与编辑。',
+        '💡 即将跳到「日记」页查看。',
       ].filter(Boolean)
       return lines.join('\n')
     } catch (e) {
@@ -850,6 +878,86 @@ Page({
     return null
   },
 
+  // —— 日记附件查询：用户要求「显示某篇日记的图片/附件」而不是录入 ——
+  _isDiaryLookup(text) {
+    const t = String(text || '')
+    if (!/日记|附件|图片|照片|户型图|图纸|截图/.test(t)) return false
+    return /显示|展示|找出|找一下|打开|看看|看一下|发我|发出来|搜一下|搜索|哪个|哪篇|哪一篇|哪条/.test(t)
+  },
+
+  // 2-gram 相关度打分：日记标题/正文与用户文本的重叠度。
+  // 常用词（出现在多篇日记里的 gram）按 document frequency 过滤，避免「一个/里面」这类虚词干扰选篇。
+  _pickDiaryByText(text, diaries) {
+    const t = String(text || '')
+    const list = diaries || []
+    if (!list.length) return null
+    const sets = list.map((d) => {
+      const src = String(d.title || '') + String(d.content || '')
+      const s = new Set()
+      for (let i = 0; i + 2 <= src.length; i++) s.add(src.slice(i, i + 2))
+      return s
+    })
+    const df = {}
+    sets.forEach((s) => s.forEach((g) => { df[g] = (df[g] || 0) + 1 }))
+    const dfMax = Math.max(2, list.length * 0.4)
+    let best = null; let bestScore = 0
+    sets.forEach((s, i) => {
+      let score = 0
+      s.forEach((g) => { if (t.indexOf(g) !== -1 && df[g] <= dfMax) score++ })
+      if (score > bestScore) { bestScore = score; best = list[i] }
+    })
+    return bestScore >= 2 ? best : null
+  },
+
+  // 返回 { text, images? }；找不到相关日记返回 null（落到 LLM 问答）
+  async _handleDiaryLookup(text) {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return null
+    try {
+      const { data, error } = await cloud.database
+        .from('diaries')
+        .select('id,title,content,diary_date,image_paths')
+        .eq('project_id', projectId)
+        .neq('deleted', true)
+        .limit(100)
+      if (error || !(data || []).length) return null
+      const hit = this._pickDiaryByText(text, data)
+      if (!hit) return null
+      const fileIds = hit.image_paths || []
+      if (!fileIds.length) {
+        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '），但这篇日记没有附件图片。' }
+      }
+      const signed = await cloud.storage.createSignedUrls(fileIds)
+      const urls = (signed.data || []).map((x) => x.signedUrl).filter(Boolean)
+      if (!urls.length) {
+        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》，但图片链接获取失败，请到「日记」页查看。' }
+      }
+      return {
+        text: '🖼️ 找到日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '）的附件，共 ' + urls.length + ' 张，点击图片可放大：',
+        images: urls,
+      }
+    } catch (e) {
+      return null
+    }
+  },
+
+  // 聊天气泡里的图片点击放大
+  previewMsgImage(e) {
+    const urls = e.currentTarget.dataset.imgs || []
+    const cur = e.currentTarget.dataset.cur
+    if (urls.length) wx.previewImage({ current: cur, urls })
+  },
+
+  // —— 录入成功后自动跳对应页面：日记→日记 tab；花费/材料→花费 tab（材料清单在其中）——
+  _afterEntryJump(kind) {
+    setTimeout(() => {
+      try {
+        if (kind === 'diary') wx.switchTab({ url: '/pages/diary/list' })
+        else wx.switchTab({ url: '/pages/budget/overview' })
+      } catch (e) { /* 忽略跳转失败，不打断 */ }
+    }, 900) // 留 0.9s 让用户看到 ✅ 回执再跳
+  },
+
   async send(src) {
     const text = String(typeof src === 'string' ? src : this.data.input || '').trim()
     if (!text || this.data.loading) return
@@ -858,8 +966,10 @@ Page({
     const projectId = store.getCurrentProjectId()
 
     // 统一收尾：无论成功/失败/异常都复位 loading，避免 UI 卡死（2026-10-15 修：裸调 tryParseIntakeMaterial 抛错未捕获导致死机）
-    const finish = (replyText) => {
-      const next = this.data.messages.concat([{ role: 'ai', text: String(replyText || '回答失败，请重试') }])
+    const finish = (replyText, images) => {
+      const msg = { role: 'ai', text: String(replyText || '回答失败，请重试') }
+      if (images && images.length) msg.images = images
+      const next = this.data.messages.concat([msg])
       this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })
     }
 
@@ -873,6 +983,15 @@ Page({
           const quick = this._routeQuery(text, stats)
           if (quick) {
             finish(quick)
+            return
+          }
+        }
+        // 日记附件查询（如「请显示那篇户型图日记的附件」）优先于录入意图，
+        // 否则「请显示出来」会被 detectIntent 误判为录入日记
+        if (this._isDiaryLookup(text)) {
+          const found = await this._handleDiaryLookup(text)
+          if (found) {
+            finish(found.text, found.images)
             return
           }
         }
