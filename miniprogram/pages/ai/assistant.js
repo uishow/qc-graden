@@ -121,7 +121,8 @@ async function buildSnapshot(projectId) {
     cloud.database.from('stages').select('*').eq('project_id', projectId).order('sort_order'),
     cloud.database.from('rooms').select('id,name,sort_order').eq('project_id', projectId).order('sort_order'),
     // 最近 15 条日记（足够 AI 看上下文，不再多取防止 LLM 输入太长）
-    cloud.database.from('diaries').select('id,title,content,diary_date,room_id,room_ids,stage_id,stage_ids,updated_at').eq('project_id', projectId).neq('deleted', true).order('updated_at', { ascending: false }).limit(15),
+    // image_paths 用于给 LLM 标注「哪篇有附件」，让问答能正确引导用户调图
+    cloud.database.from('diaries').select('id,title,content,diary_date,image_paths,room_id,room_ids,stage_id,stage_ids,updated_at').eq('project_id', projectId).neq('deleted', true).order('updated_at', { ascending: false }).limit(15),
     // 材料全量（项目内通常 < 100 条）
     cloud.database.from('materials').select('id,name,category,status,total_price,planned_price,room_id,room_ids').eq('project_id', projectId),
     // 花费全量（用于按类型 / 按阶段 汇总；项目通常 < 500 条）
@@ -203,6 +204,7 @@ async function buildSnapshot(projectId) {
       content: (d.content || '').slice(0, 200), // 限 200 字写入快照
       roomNames,
       stageNames,
+      hasImage: !!(d.image_paths && d.image_paths.length), // 供 LLM 问答标注「有附件」
     }
   })
 
@@ -532,16 +534,20 @@ Page({
     const isQuestion = /[?？]|怎么|如何|为什么|为何|啥|哪|多少|几|查询|统计|分析|看看|显示|展示|找出|找一下|打开|搜一下|搜索|发我|发出来|吗\s*$|呢\s*$/.test(t)
     const hasMat = /录入|添加|登记|加一笔|材料|建材|清单/.test(t)
     const hasDiary = /记日记|写日记|记一篇日记|记录日记|日记(?!本)/.test(t)
-    const hasExp = /记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了|花\b/.test(t)
+    // 「费用」是用户高频说法（2026-10-15 实测「设计师预定费用是200」）
+    const hasExp = /记一笔|记一下|花费|支出|付款|付了|报销|开支|消费|花了|费用|花\b/.test(t)
     const qty = this._hasQtyUnit(t)
-    const amt = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/.test(t)
+    // 货币判定：「数字元/块钱」或「花了/付了/费用/金额 + 数字」。
+    // 裸「数字块」不算钱——「瓷砖 10块」的块是量词（2026-10-15 回归发现）
+    const amt = /(\d+(?:\.\d+)?)\s*(?:元|块钱)/.test(t) || /(?:花了|付了|费用|金额)\s*(?:是|[:：])?\s*\d/.test(t)
     const pricey = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)|单价|总价|合计|每/.test(t)
     const hasDate = /今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2})/.test(t)
     const knownName = this._matchRoomIds(t).length > 0 || this._matchStageIds(t).length > 0
     if (hasDiary && !isQuestion) return 'diary'
-    if (hasMat && !isQuestion) return 'material'
-    if (qty && pricey) return 'material' // 欧派木门三张 300一张
+    // 「录入花费…」含「录入」会命中 hasMat —— 花费意图必须优先于材料（2026-10-15 实测误判为材料卡）
     if (hasExp && amt) return 'expense' // 有金额 = 录入花费
+    if (hasMat && !hasExp && !isQuestion) return 'material'
+    if (qty && pricey) return 'material' // 欧派木门三张 300一张
     if (hasExp && qty) return 'material' // 记一笔瓷砖 10块（无价格按材料上下文）
     if (hasExp && !isQuestion) return 'expense' // 记一笔（纯录入指令）
     if (hasDate && !amt && !isQuestion) return 'diary' // 今天…叙述（非提问）
@@ -555,18 +561,21 @@ Page({
   //   ② 金额多形态：「500元」「花了500」「金额：500」
   //   ③ 声明短语从 remark 清理出去，避免泄漏
   tryParseExpense(text) {
-    // 显式备注：备注/说明/事由 后的内容（截止到逗号/句末/下一个字段关键词）
-    const remarkDecl = text.match(/(?:备注|说明|事由)\s*(?:是|[:：])?\s*([^，。；;]*)/)
+    // 显式备注：备注/说明/事由/主要内容 后的内容（截止到逗号/句末/下一个字段关键词）
+    // 「主要内容是设计师预定费用是200」是用户实测句式（2026-10-15）
+    const remarkDecl = text.match(/(?:备注|说明|事由|主要内容|内容)\s*(?:是|[:：])?\s*([^，。；;]*)/)
     let declaredRemark = ''
     if (remarkDecl && remarkDecl[1]) {
       declaredRemark = remarkDecl[1].split(/\s*(?:阶段|类型|类别|日期|支付)\s*(?:是|[:：])?\s*/)[0].trim()
+      // 尾部粘连的金额剥掉（如「设计师预定费用是200」→「设计师预定费用」）
+      declaredRemark = declaredRemark.replace(/\s*(?:是|[:：])?\s*\d+(?:\.\d+)?\s*元?\s*$/, '').trim()
     }
     // 显式类型：类型/类别 是/： 人工|设计|订金|定金|材料|其他
     const typeDecl = text.match(/(?:类型|类别)\s*(?:是|[:：])?\s*(人工|设计|订金|定金|材料|其他)/)
 
-    // 金额：优先「数字元/块」，其次「花了500」「金额：500」（省略元）
+    // 金额：优先「数字元/块」，其次「花了500」「金额：500」「费用是200」（省略元）
     const amtRe = /(\d+(?:\.\d+)?)\s*(?:元|块|块钱)/
-    const m = text.match(amtRe) || text.match(/(?:花了|金额)\s*[:：]?\s*(\d+(?:\.\d+)?)/)
+    const m = text.match(amtRe) || text.match(/(?:花了|金额|费用)\s*(?:是|[:：])?\s*(\d+(?:\.\d+)?)/)
     if (!m) return null
     const amountFen = Math.round(Number(m[1]) * 100)
     if (!amountFen) return null
@@ -586,7 +595,7 @@ Page({
     } else {
       remark = text
       remark = remark.replace(amtRe, ' ')
-      remark = remark.replace(/(花了|金额)\s*[:：]?\s*(\d+(?:\.\d+)?)/g, ' ')
+      remark = remark.replace(/(花了|金额|费用)\s*(?:是|[:：])?\s*(\d+(?:\.\d+)?)/g, ' ')
       remark = remark.replace(/(备注|说明|事由|类型|类别)\s*(?:是|[:：])?/g, ' ')
       remark = remark.replace(/(人工|工钱|工人|师傅|设计|订金|定金|预付款|花费|支出|付款|付了|报销|开支|消费|记一笔|记一下|花)/g, ' ')
       remark = remark.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
@@ -602,8 +611,15 @@ Page({
     const diaryDate = parseDateFromText(text)
     const roomIds = this._matchRoomIds(text)
     const stageIds = this._matchStageIds(text)
+    // 显式声明优先（2026-10-15 用户实测「标题是花花花，内容是好好好」整句漏进正文）：
+    // 标题值截到逗号/下一个字段词；内容值允许逗号、截到句末
+    const titleDecl = text.match(/标题\s*(?:是|[:：])\s*([^，,。；;]+)/)
+    const titleVal = titleDecl && titleDecl[1] ? titleDecl[1].split(/\s*(?:内容|日期|房间|阶段)\s*(?:是|[:：])/)[0].trim() : ''
+    const contentDecl = text.match(/内容\s*(?:是|[:：])\s*([^。；;]+)/)
     let body = text
-    body = body.replace(/(录入|记日记|写日记|记一篇日记|记录日记|日记|记录|记一下|记一笔)/g, ' ')
+    body = body.replace(/(录入|记日记|写日记|记一篇日记|记录日记|日记|记录|记一下|记一笔|一篇)/g, ' ')
+    if (titleDecl) body = body.replace(/标题\s*(?:是|[:：])[^，,。；；：:]*/g, ' ')
+    if (contentDecl) body = body.replace(/内容\s*(?:是|[:：])[^。；；]*/g, ' ')
     body = body.replace(/(今天|昨天|昨日|前天|大前天|明天|后天|上周.|这周.|本周.|(\d+月\d+[日号])|(\d{4}-\d{1,2}-\d{1,2}))/g, ' ')
     // 已知房间/阶段名仅当剥离后正文仍有内容时才移除，避免正文被掏空导致解析失败
     let stripped = body
@@ -616,8 +632,10 @@ Page({
       content = body.replace(/[，,。.；;]+/g, ' ').replace(/\s+/g, ' ').trim()
     }
     if (!content || content.length < 2) content = text.trim() // 终极兜底：整句当正文
+    if (contentDecl && contentDecl[1]) content = contentDecl[1].trim() // 显式内容声明最优先
+    // 显式标题声明 > 首句截取
     const firstSentence = content.split(/[。！？\n]/)[0].trim()
-    const title = (firstSentence || content).slice(0, 20) || '日记'
+    const title = (titleVal || (firstSentence || content)).slice(0, 20) || '日记'
     return { title, content, diary_date: diaryDate, room_ids: roomIds, stage_ids: stageIds, original: text.trim() }
   },
 
@@ -627,6 +645,36 @@ Page({
     if (intent === 'expense') return this.tryParseExpense(text)
     if (intent === 'diary') return this.tryParseDiary(text)
     return null
+  },
+
+  // —— 阶段状态修改（问题 2：用户想用 AI 改装修进度）——
+  // 命中条件：变更动词（改为/设为/…）+ 状态词；阶段从 raw.stages 按名字匹配。
+  // 返回 { stage_id, stage_name, status, from_status } 或 null
+  _parseStageUpdate(text) {
+    const t = String(text || '')
+    if (!/(改为|改成|设为|设置成|设置成|标为|标记为|标成|换成|更新为|调整为|修改为|改成)/.test(t)) return null
+    // 状态词→枚举（判定顺序：done → doing → pending，「开始」是「已开始」子串故 doing 放 done 后）
+    let status = ''
+    if (/(已经)?完成|做完|竣工|收尾/.test(t)) status = 'done'
+    else if (/进行中|已开始|已经开工|开工了|开始干了|在做|开始/.test(t)) status = 'doing'
+    else if (/未开始|还没开始|暂停|停工|不干了/.test(t)) status = 'pending'
+    if (!status) return null
+    // 阶段名匹配：优先文本直接命中已知阶段名；无命中时尝试「X阶段」候选模糊匹配
+    let ids = this._matchStageIds(t)
+    if (!ids.length) {
+      const cand = t.match(/([\u4e00-\u9fa5A-Za-z0-9]{2,6})阶段/)
+      if (cand && cand[1]) {
+        const hit = (this.data.raw.stages || []).find((s) => {
+          const n = String(s.name || '')
+          return n === (cand[1] + '阶段') || n.indexOf(cand[1]) !== -1 || cand[1].indexOf(n) !== -1
+        })
+        if (hit) ids = [hit.id]
+      }
+    }
+    if (!ids.length) return null
+    const st = (this.data.raw.stages || []).find((s) => s.id === ids[0])
+    if (!st) return null
+    return { stage_id: st.id, stage_name: st.name || '', status, from_status: st.status || 'pending' }
   },
 
   // 启发式解析结果是否「置信度不足」，需要 LLM 兜底补全。
@@ -661,6 +709,13 @@ Page({
         ['单价', '¥' + yuan(p.unit_price)],
         ['合计', '¥' + yuan(p.total_price)],
         ['备注', p.note || '—'],
+      ]
+    }
+    if (kind === 'stage') {
+      const sn = { pending: '未开始', doing: '进行中', done: '已完成' }
+      return [
+        ['阶段', p.stage_name || '—'],
+        ['状态', (sn[p.from_status] || p.from_status || '—') + ' → ' + (sn[p.status] || p.status)],
       ]
     }
     if (kind === 'expense') {
@@ -839,7 +894,32 @@ Page({
     if (intent === 'material') return this._handleIntakeMaterial(data)
     if (intent === 'expense') return this._handleIntakeExpense(data)
     if (intent === 'diary') return this._handleIntakeDiary(data)
+    if (intent === 'stage') return this._handleStageUpdate(data)
     return '未知录入类型'
+  },
+
+  // —— 阶段状态修改落库：write.update('stages')，成功后回执（不自动跳转，提示去首页看板）——
+  async _handleStageUpdate(p) {
+    const projectId = store.getCurrentProjectId()
+    if (!projectId) return '当前没有项目，无法修改进度。'
+    if (!p.stage_id) return '未识别到要修改的阶段，请说「把 XX 阶段改为进行中」。'
+    try {
+      const r = await write.update('stages', projectId, p.stage_id, {
+        status: p.status,
+        updated_at: new Date().toISOString(),
+      })
+      if (r && r.error) return '修改失败：' + (r.error.message || r.error.errMsg || '未知错误')
+      const sn = { pending: '未开始', doing: '进行中', done: '已完成' }
+      return [
+        '✅ 已修改装修进度：',
+        `· 阶段：${p.stage_name}`,
+        `· 状态：${sn[p.from_status] || p.from_status || '—'} → ${sn[p.status] || p.status}`,
+        '',
+        '💡 可到「首页」的阶段看板查看最新进度。',
+      ].join('\n')
+    } catch (e) {
+      return '修改失败：' + (e && (e.errMsg || e.message) || '未知错误')
+    }
   },
 
   async _handleIntakeExpense(intake) {
@@ -1117,7 +1197,9 @@ Page({
   _isDiaryLookup(text) {
     const t = String(text || '')
     if (!/日记|附件|图片|照片|户型图|图纸|截图/.test(t)) return false
-    return /显示|展示|找出|找一下|打开|看看|看一下|发我|发出来|搜一下|搜索|哪个|哪篇|哪一篇|哪条/.test(t)
+    // 动词表覆盖用户实际说法：2026-10-15 用户实测「能否把…户型图调出来？」未命中，
+    // 原因是「调出来」不在表里 → 落到 LLM 问答（AI 只看得到文字快照，答“调不出来”）
+    return /显示|展示|找出|找一下|打开|看看|看一下|看下|发我|发出来|搜一下|搜索|哪个|哪篇|哪一篇|哪条|调出来|调出|查看|查阅|翻出来|找出来|拿出来|翻一下|翻下/.test(t)
   },
 
   // 2-gram 相关度打分：日记标题/正文与用户文本的重叠度。
@@ -1221,6 +1303,13 @@ Page({
       // ★ 系统数据录入快捷指令（材料/日记/花费）：启发式解析 → write.insert，不走 LLM
       //   未命中且 LLM 已配时走 LLM 兜底提取；让 LLM 不可用 / 未配置时也能录入
       if (projectId) {
+        // 阶段状态修改（「把 X 阶段改为进行中」）必须排在 _routeQuery 之前：
+        // 查询路由的 /进度|目前.*阶段/ 会把「把…装修进度修改为…」抢走当统计问答
+        const stageUpd = this._parseStageUpdate(text)
+        if (stageUpd) {
+          this._showEntryPreview('stage', stageUpd)
+          return
+        }
         // 多维分析查询优先于录入意图：避免「本月花费多少」因含「花费」被误判为花费录入
         if (this.data.raw) {
           const stats = this.computeStats()

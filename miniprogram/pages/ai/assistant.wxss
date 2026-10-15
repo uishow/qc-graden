@@ -103,6 +103,9 @@
   display: flex; gap: 16rpx;
   margin-top: 18rpx;
 }
+/* 主操作行：确认写入占整行，避免三按钮挤一行被压成竖排换字 */
+.entry-actions-main { margin-top: 14rpx; }
+.entry-actions-main .entry-btn { width: 100%; }
 .entry-btn {
   flex: 1; text-align: center;
   font-size: 26rpx; font-weight: 500;
@@ -177,17 +180,26 @@
 .form-flex { flex: 1; min-width: 0; }
 .form-label { font-size: 25rpx; color: var(--c-text-2); margin-bottom: 10rpx; }
 .req { color: #e5484d; }
+/* input 必须显式 height + line-height：只给 padding 时部分基础库把内容区压扁，预填文字被上下裁半（2026-10-15 用户实测） */
 .form-input {
   background: var(--c-secondary-bg);
   border: 1rpx solid var(--c-card-border);
   border-radius: 12rpx;
-  padding: 16rpx 20rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 20rpx;
   font-size: 28rpx;
   color: var(--c-text);
   width: 100%;
   box-sizing: border-box;
 }
-.form-textarea { min-height: 120rpx; line-height: 1.6; }
+/* textarea 覆盖：不能用固定 height/line-height，auto 高度 + 上下 padding */
+.form-textarea {
+  height: auto;
+  min-height: 160rpx;
+  line-height: 1.6;
+  padding: 16rpx 20rpx;
+}
 .form-chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
 .form-chip {
   font-size: 25rpx;

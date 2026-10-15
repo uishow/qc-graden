@@ -41,15 +41,20 @@
       <view class="msg-col">
         <!-- 录入预览确认卡 -->
         <view wx:if="{{item.type === 'entry'}}" class="entry-card">
-          <view class="entry-head">请确认录入信息</view>
+          <view class="entry-head">请确认{{item.entry.kind === 'stage' ? '修改' : '录入'}}信息</view>
           <view wx:for="{{item.entry.rows}}" wx:for-item="row" wx:key="index" class="entry-row">
             <text class="entry-k">{{row[0]}}</text>
             <text class="entry-v">{{row[1]}}</text>
           </view>
-          <view class="entry-actions">
+          <!-- 两行布局：取消+修改一行（次要），确认写入整行（主操作）。
+               三按钮挤一行时「确认写入」会被压到换行竖排（2026-10-15 用户实测）。
+               阶段修改不支持表单编辑 → 隐藏「修改」 -->
+          <view class="entry-actions" wx:if="{{item.entry.kind !== 'stage'}}">
             <view class="entry-btn entry-cancel" bindtap="cancelEntry">取消</view>
             <view class="entry-btn entry-edit" bindtap="openEntryForm">修改</view>
-            <view class="entry-btn entry-ok" bindtap="confirmEntry">确认写入</view>
+          </view>
+          <view class="entry-actions entry-actions-main">
+            <view class="entry-btn {{item.entry.kind === 'stage' ? 'entry-cancel' : 'entry-ok'}}" bindtap="{{item.entry.kind === 'stage' ? 'cancelEntry' : 'confirmEntry'}}">{{item.entry.kind === 'stage' ? '取消修改' : '确认写入'}}</view>
           </view>
         </view>
         <!-- 普通文本/图片气泡 -->
