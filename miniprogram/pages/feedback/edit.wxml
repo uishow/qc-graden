@@ -1,7 +1,7 @@
 <view class="page-root {{theme}}">
 
   <view class="title-serif" style="margin-bottom:8rpx">APP 评价与意见</view>
-  <view class="muted" style="margin-bottom:24rpx">您的反馈会推动我们改进，先打个分，再写下想说的话。</view>
+  <view class="muted" style="margin-bottom:24rpx">您的反馈会推动我们改进，先打个分，再写下想说的话；下方可查看历史记录。</view>
 
   <!-- 三维评分（易用性 / 美观性 / 功能性），每行 5 颗可点星 -->
   <view class="card" wx:if="{{!done}}">
@@ -126,6 +126,65 @@
       <view class="btn-outline flex1" bindtap="resetAgain">再写一条</view>
       <view class="btn-primary flex1" bindtap="goBack">返回「我的」</view>
     </view>
+  </view>
+
+  <!-- 我的反馈历史：原本是独立 /list 页（commit 6），现合并到本页下方折叠区
+       - 普通用户：只看自己提交的（自动按 openid 过滤）
+       - 管理员：可在「我的反馈 / 全员反馈」两 tab 切换
+       - 默认展开；提交新评价后会自动刷新 -->
+  <view class="card history-card">
+    <view class="between history-head" bindtap="toggleHistory">
+      <view>
+        <text style="font-weight:600;font-size:30rpx">我的反馈历史</text>
+        <text wx:if="{{isManager}}" class="muted" style="margin-left:12rpx;font-weight:400;font-size:22rpx">（管理员视图）</text>
+      </view>
+      <view class="muted">{{showHistory ? '收起 ▴' : '展开 ▾'}}</view>
+    </view>
+
+    <block wx:if="{{showHistory}}">
+      <!-- 管理员 tabs -->
+      <view wx:if="{{isManager}}" class="tabs">
+        <view class="tab {{historyScope === 'self' ? 'tab-on' : ''}}" data-scope="self" bindtap="switchHistoryScope">我的反馈</view>
+        <view class="tab {{historyScope === 'all' ? 'tab-on' : ''}}" data-scope="all" bindtap="switchHistoryScope">全员反馈</view>
+      </view>
+
+      <view wx:if="{{historyLoading}}" class="muted" style="margin-top:16rpx">加载中…</view>
+      <view wx:elif="{{historyList.length === 0}}" class="muted" style="margin-top:16rpx">{{historyEmptyText || '还没有反馈记录'}}</view>
+
+      <block wx:else>
+        <view wx:for="{{historyList}}" wx:key="id" class="history-item">
+          <view class="between">
+            <view class="muted">{{item.timeText}}</view>
+            <view wx:if="{{historyScope === 'all'}}" class="muted" style="font-size:22rpx">用户 ···{{item.openidTail}}</view>
+          </view>
+          <view class="history-row">
+            <view class="history-dim">
+              <text class="muted" style="font-size:22rpx">易用性</text>
+              <text class="history-stars">
+                <text wx:for="{{5}}" wx:key="u{{index}}" class="h-star {{item.scores.usability > index ? 'h-star-on' : ''}}">★</text>
+              </text>
+            </view>
+            <view class="history-dim">
+              <text class="muted" style="font-size:22rpx">美观性</text>
+              <text class="history-stars">
+                <text wx:for="{{5}}" wx:key="a{{index}}" class="h-star {{item.scores.aesthetics > index ? 'h-star-on' : ''}}">★</text>
+              </text>
+            </view>
+            <view class="history-dim">
+              <text class="muted" style="font-size:22rpx">功能性</text>
+              <text class="history-stars">
+                <text wx:for="{{5}}" wx:key="f{{index}}" class="h-star {{item.scores.functionality > index ? 'h-star-on' : ''}}">★</text>
+              </text>
+            </view>
+          </view>
+          <view wx:if="{{item.comment}}" class="history-comment">{{item.comment}}</view>
+          <view wx:if="{{item.system || item.app_version}}" class="muted history-meta">
+            <block wx:if="{{item.system}}">{{item.system}}</block>
+            <block wx:if="{{item.app_version}}"> · v{{item.app_version}}</block>
+          </view>
+        </view>
+      </block>
+    </block>
   </view>
 
 </view>

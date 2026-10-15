@@ -16,8 +16,7 @@
     "pages/stage/board",
     "pages/room/manage",
     "pages/feedback/edit",
-    "pages/ai/assistant",
-    "pages/feedback/list"
+    "pages/ai/assistant"
   ],
   "window": {
     "backgroundColor": "#FAF6EF",

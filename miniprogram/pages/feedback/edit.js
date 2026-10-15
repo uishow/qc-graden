@@ -8,6 +8,14 @@ const app = getApp()
 
 const DIM_KEYS = ['usability', 'aesthetics', 'functionality']
 
+// ISO 时间戳 → YYYY-MM-DD HH:mm；空值兜底 '—'
+function formatTime(iso) {
+  const s = String(iso || '').trim()
+  if (!s) return '—'
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/)
+  return m ? m[1] + ' ' + m[2] : s.slice(0, 16)
+}
+
 Page({
   data: {
     theme: 'theme-a',
@@ -18,11 +26,19 @@ Page({
     // 提交回执快照：done=true 时填，供感谢卡片把刚提交的内容回放给用户看；
     // 同时写 wx.storage「lastFeedbackAt」让「我的」页下方展示一行「上次反馈：xxx」
     doneSnapshot: null, // { scores:{...}, comment, hasScores, hasComment, submittedAt }
+    // 我的反馈历史（合并自独立 /list 页，commit 6 2026-10-15）
+    showHistory: true, // 默认展开：用户一进页面就能看到自己过往的反馈
+    isManager: false,
+    historyScope: 'self', // 'self' = 我的反馈 / 'all' = 全员反馈（仅管理员可切）
+    historyList: [],
+    historyLoading: false,
+    historyEmptyText: '',
   },
 
   onShow() {
     store.applyTheme(this)
-    // 评价页不带 tabBar，不调 applyTabBar
+    // 每次进入页面重新加载历史区——也保证新提交的反馈立刻能看到
+    this.loadHistory()
   },
 
   // 点星打分：再次点击同一颗星 = 切换清除（变 0），点不同星 = 替换。
@@ -49,10 +65,61 @@ Page({
       doneSnapshot: null,
       submitting: false,
     })
+    // 「再写一条」时同时刷新历史区
+    this.loadHistory()
   },
 
   goBack() {
     wx.navigateBack({ delta: 1, fail: () => wx.switchTab({ url: '/pages/user/profile' }) })
+  },
+
+  toggleHistory() {
+    this.setData({ showHistory: !this.data.showHistory })
+  },
+
+  switchHistoryScope(e) {
+    const next = e.currentTarget.dataset.scope
+    if (!next || next === this.data.historyScope) return
+    this.setData({ historyScope: next, historyList: [] }, () => this.loadHistory())
+  },
+
+  // 拉取历史反馈（按当前 historyScope：self/all）
+  // 服务端在管理员申请 all 但实际不是管理员时会强制回落到 self，
+  // 这里同步对齐 UI，避免「选了全员但只列自己的数据」出现
+  async loadHistory() {
+    if (this.data.historyLoading) return
+    this.setData({ historyLoading: true })
+    let result = null
+    try {
+      const r = await wx.cloud.callFunction({
+        name: 'feedbackList',
+        data: { scope: this.data.historyScope },
+      })
+      result = (r && r.result) || null
+    } catch (e) {
+      result = { ok: false, message: '网络异常，请重试' }
+    }
+    this.setData({ historyLoading: false })
+    if (!result || !result.ok) {
+      this.setData({
+        historyList: [],
+        historyEmptyText: (result && result.message) || '加载失败',
+        isManager: false,
+      })
+      return
+    }
+    const isManager = !!result.isManager
+    const finalScope = (this.data.historyScope === 'all' && result.scope === 'self') ? 'self' : this.data.historyScope
+    const list = (result.list || []).map((it) => ({
+      ...it,
+      timeText: formatTime(it.submittedAt),
+    }))
+    this.setData({
+      isManager,
+      historyScope: finalScope,
+      historyList: list,
+      historyEmptyText: list.length ? '' : (finalScope === 'all' ? '暂无全员反馈' : '还没有反馈记录'),
+    })
   },
 
   async submit() {
@@ -106,5 +173,8 @@ Page({
       },
     })
     wx.showToast({ title: '已提交，谢谢', icon: 'success' })
+    // 关键修复（2026-10-15 用户反馈「自己写的看不到自己提交的」）：
+    // 提交成功后立即刷新历史区，让刚提交的那条立刻出现在「我的反馈」列表里
+    this.loadHistory()
   },
 })

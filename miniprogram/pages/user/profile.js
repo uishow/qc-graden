@@ -136,13 +136,9 @@ Page({
     }
     wx.navigateTo({ url: '/pages/ai/assistant' })
   },
-  // APP 评价与意见：跳转独立页（pages/feedback/edit，三维 5 分评分 + 意见框）
+  // APP 评价与意见：跳转独立页（pages/feedback/edit，三维 5 分评分 + 意见框 + 内嵌我的反馈历史）
   goFeedback() {
     wx.navigateTo({ url: '/pages/feedback/edit' })
-  },
-  // 我的反馈历史：普通用户看自己 / 管理员可看全员（在 pages/feedback/list 内部按角色自动切换）
-  goFeedbackList() {
-    wx.navigateTo({ url: '/pages/feedback/list' })
   },
   setThemeA() { this.switchTheme('theme-a') },
   setThemeB() { this.switchTheme('theme-b') },

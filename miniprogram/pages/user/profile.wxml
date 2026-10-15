@@ -84,23 +84,12 @@
       </view>
     </view>
 
-    <!-- 第 3 行（整行）：APP 评价与意见（sub 行展示上次反馈时间，没有就不显示） -->
+    <!-- 第 3 行（整行）：APP 评价与意见 —— 副文显示上次反馈时间，没有就提示去评价；点进去同页下方可看历史 -->
     <view class="card func-row func-row-full" style="margin-bottom:16rpx" bindtap="goFeedback">
       <view class="func-cell func-cell-pure">
         <view class="func-cell-main">
           <view class="func-cell-label">APP 评价与意见</view>
-          <view class="func-cell-sub muted">{{lastFeedbackAt ? '上次反馈：' + lastFeedbackAt : '给作者反馈、打分、提建议'}}</view>
-        </view>
-      </view>
-      <view class="muted func-cell-chevron">›</view>
-    </view>
-
-    <!-- 第 4 行（整行）：我的反馈历史（普通用户看自己 / 管理员可看全员） -->
-    <view class="card func-row func-row-full" bindtap="goFeedbackList">
-      <view class="func-cell func-cell-pure">
-        <view class="func-cell-main">
-          <view class="func-cell-label">我的反馈历史</view>
-          <view class="func-cell-sub muted">{{isAnyManager ? '管理员可查看全员反馈' : '看我发过的反馈记录'}}</view>
+          <view class="func-cell-sub muted">{{lastFeedbackAt ? '上次反馈：' + lastFeedbackAt : '打分、写意见、看历史'}}</view>
         </view>
       </view>
       <view class="muted func-cell-chevron">›</view>

@@ -62,3 +62,57 @@
   color: var(--c-text-2);
   text-align: right;
 }
+
+/* ============================================================
+ * 我的反馈历史（合并自独立 /list 页，commit 6 2026-10-15）
+ *   - 历史区与表单/回执并行展示，让用户一个页面搞定「写+看」
+ *   - 折叠默认展开（解决「自己提交看不到」的问题——以前需跳独立页才能看）
+ * ============================================================ */
+.history-card { margin-top: 20rpx; }
+.history-head { padding: 4rpx 0; }
+
+/* 管理员「我的反馈 / 全员反馈」切 tab（沿用 pages/feedback/list 同样的 tabs 样式） */
+.tabs { display: flex; gap: 12rpx; margin: 20rpx 0 16rpx; }
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  font-size: 28rpx;
+  color: var(--c-text-2);
+  background: var(--c-card);
+  border: 1rpx solid var(--c-card-border);
+  border-radius: 12rpx;
+}
+.tab.tab-on {
+  color: var(--c-primary);
+  border-color: var(--c-primary);
+  background: var(--c-secondary-bg);
+}
+
+.history-item {
+  border-top: 1rpx solid var(--c-card-border);
+  padding: 20rpx 0;
+}
+.history-item:first-of-type { border-top: none; }
+.history-row {
+  display: flex;
+  gap: 20rpx;
+  margin: 16rpx 0;
+  flex-wrap: wrap;
+}
+.history-dim { display: flex; align-items: center; gap: 6rpx; }
+.history-stars { display: flex; gap: 2rpx; }
+.h-star { font-size: 24rpx; color: var(--c-card-border); line-height: 1; }
+.h-star-on { color: var(--c-accent); }
+
+.history-comment {
+  background: var(--c-secondary-bg);
+  border-radius: 10rpx;
+  padding: 14rpx 18rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 8rpx 0;
+}
+.history-meta { font-size: 22rpx; margin-top: 10rpx; }
