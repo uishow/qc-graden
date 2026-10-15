@@ -72,6 +72,17 @@
               bindtap="previewMsgImage"
             />
           </view>
+          <!-- AI 回复里的引导做成可点 chips：用户照文字重打容易说法对不上、又出不来结果 -->
+          <view wx:if="{{item.suggestions && item.suggestions.length}}" class="bubble-sugs">
+            <view
+              wx:for="{{item.suggestions}}"
+              wx:for-item="q"
+              wx:key="index"
+              class="bubble-sug"
+              data-q="{{q}}"
+              bindtap="sendSuggest"
+            >{{q}}</view>
+          </view>
         </view>
       </view>
     </view>

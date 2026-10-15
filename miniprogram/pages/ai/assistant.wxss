@@ -238,6 +238,22 @@
 }
 .bubble-img:active { opacity: 0.85; }
 
+/* 气泡内的可点引导 chips（避免用户照文字重打导致说法对不上） */
+.bubble-sugs {
+  display: flex; flex-wrap: wrap; gap: 12rpx;
+  margin-top: 14rpx;
+}
+.bubble-sug {
+  font-size: 24rpx;
+  color: var(--c-primary);
+  background: var(--c-secondary-bg);
+  border: 1rpx solid var(--c-primary);
+  border-radius: 999rpx;
+  padding: 10rpx 18rpx;
+  max-width: 100%;
+}
+.bubble-sug:active { opacity: 0.8; }
+
 /* 输入条 */
 .chat-input {
   flex-shrink: 0;

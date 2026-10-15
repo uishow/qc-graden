@@ -996,6 +996,45 @@ Page({
     }
   },
 
+  // —— LLM 理解优先：一句话同时判意图 + 抽字段（云函数 mode:'parse'）——
+  // 返回：{ intent:'material'|'expense'|'diary'|'stage', parsed }；
+  //       { intent:null } = LLM 明确说不是录入指令（客户端转规则/问答）；
+  //       null = 未配置/调用失败/结果不可用（客户端继续走规则兜底）
+  async _llmParse(text) {
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'aiAssistant',
+        data: {
+          mode: 'parse',
+          text,
+          rooms: this._knownRoomNames(),
+          stages: this._knownStageNames(),
+          today: this._todayStr(),
+        },
+      })
+      const r = res && res.result
+      if (!r || !r.ok) return null
+      if (r.intent === 'none') return { intent: null }
+      if (r.intent === 'stage_update') {
+        const d = r.data || {}
+        const name = String(d.stage_name || '').trim()
+        const status = ['pending', 'doing', 'done'].indexOf(d.status) >= 0 ? d.status : ''
+        if (!name || !status) return null
+        const st = (this.data.raw.stages || []).find((s) => {
+          const n = String(s.name || '')
+          return n === name || (name && (n.indexOf(name) !== -1 || name.indexOf(n) !== -1))
+        })
+        if (!st) return null
+        return { intent: 'stage', parsed: { stage_id: st.id, stage_name: st.name, status, from_status: st.status || 'pending' } }
+      }
+      const parsed = this._adaptLLMData(r.intent, r.data || {})
+      if (!parsed) return null
+      return { intent: r.intent, parsed }
+    } catch (e) {
+      return null
+    }
+  },
+
   // —— LLM 兜底提取：让云函数把自由文本转结构化 JSON 再落库 ——
   async _llmExtract(intent, text) {
     try {
@@ -1251,26 +1290,32 @@ Page({
       const list = data || []
       if (!list.length) return { text: '当前项目还没有日记，先去「日记」页记一篇吧。' }
       const hit = this._pickDiaryByText(text, list)
+      const projName = (this.data.snapshotView && this.data.snapshotView.projectName) || (this.data.snapshot && this.data.snapshot.projectName) || ''
       if (!hit) {
         const lines = list.slice(0, 5).map((d, i) => {
           const n = (d.image_paths || []).length
           return (i + 1) + '. 《' + (d.title || '无标题') + '》' + (d.diary_date || '') + (n ? '（📷' + n + '图）' : '')
         })
+        // 只列当前项目的日记：用户常跨项目找（如「999楼项目」是另一个项目），
+        // 明确带上项目名，避免他以为是 AI 没找到、反复重试
         return {
-          text: '没找到你说的是哪篇日记，可以点名说「显示《日记标题》的附件」。\n最近的日记：\n' + lines.join('\n'),
+          text: '在' + (projName ? '当前项目「' + projName + '」' : '当前项目') + '里没找到你说的那篇日记。\n' +
+            '（日记是按项目隔离的，如果是别的项目里的日记，请先切到那个项目再问）\n当前的日记有：\n' + lines.join('\n') + '\n\n点下面的按钮直接查，或说「显示《某篇日记》的附件」：',
+          // 引导做成可点按钮：用户照文字重打一遍很容易说法对不上（2026-10-15 实测「顺着引导说却没结果」）
+          suggestions: list.slice(0, 3).filter((d) => (d.image_paths || []).length).map((d) => '显示《' + (d.title || '无标题') + '》的附件'),
         }
       }
       const fileIds = hit.image_paths || []
       if (!fileIds.length) {
-        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '），但这篇日记没有附件图片。' }
+        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '），但这篇日记确实没有存附件图片（须在「日记」页上传）。' }
       }
       const signed = await cloud.storage.createSignedUrls(fileIds)
       const urls = (signed.data || []).map((x) => x.signedUrl).filter(Boolean)
       if (!urls.length) {
-        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》，但图片链接获取失败，请到「日记」页查看。' }
+        return { text: '📖 找到日记《' + (hit.title || '无标题') + '》，但图片链接获取失败（' + ((signed.error && (signed.error.message || signed.error.errMsg)) || '未知原因') + '），请到「日记」页查看。' }
       }
       return {
-        text: '🖼️ 找到日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '）的附件，共 ' + urls.length + ' 张，点击图片可放大：',
+        text: '🖼️ ' + (projName ? '「' + projName + '」' : '') + '日记《' + (hit.title || '无标题') + '》（' + (hit.diary_date || '') + '）的附件，共 ' + urls.length + ' 张，点击图片可放大：',
         images: urls,
       }
     } catch (e) {
@@ -1312,9 +1357,11 @@ Page({
     const projectId = store.getCurrentProjectId()
 
     // 统一收尾：无论成功/失败/异常都复位 loading，避免 UI 卡死（2026-10-15 修：裸调 tryParseIntakeMaterial 抛错未捕获导致死机）
-    const finish = (replyText, images) => {
+    const finish = (replyText, images, suggestions) => {
       const msg = { role: 'ai', text: String(replyText || '回答失败，请重试') }
       if (images && images.length) msg.images = images
+      // 引导做成可点 chips，避免用户照文字重打导致说法对不上
+      if (suggestions && suggestions.length) msg.suggestions = suggestions
       const next = this.data.messages.concat([msg])
       this.setData({ messages: next, loading: false, lastId: 'msg' + (next.length - 1) })
     }
@@ -1344,15 +1391,22 @@ Page({
         if (this._isDiaryLookup(text)) {
           const found = await this._handleDiaryLookup(text)
           if (found) {
-            finish(found.text, found.images)
+            finish(found.text, found.images, found.suggestions)
             return
           }
         }
         const intent = this.detectIntent(text)
         if (intent) {
-          // 启发式优先（即时/离线）；结果置信度不足时再让 LLM 兜底补全
+          // LLM 理解优先：先让模型判意图+抽字段（覆盖任意说法）；规则降级为离线兜底
+          const understood = await this._llmParse(text)
+          const llmAnswered = !!understood // LLM 已明确回应（含"不是录入"），就不再二次调用
+          if (understood && understood.intent && understood.parsed) {
+            this._showEntryPreview(understood.intent, understood.parsed)
+            return
+          }
+          // 兜底：规则解析（离线可用）；置信度不足且 LLM 没答过时才调 extract
           let parsed = this._tryParse(intent, text)
-          if (this._needsLLM(intent, parsed, text)) {
+          if (!llmAnswered && (!parsed || this._needsLLM(intent, parsed, text))) {
             const llm = await this._llmExtract(intent, text)
             if (llm) parsed = llm
           }
