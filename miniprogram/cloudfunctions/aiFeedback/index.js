@@ -24,6 +24,24 @@ function normKey(q) {
     .slice(0, 24)
 }
 
+// 分页拉全量：不依赖单次 limit 上限（云函数端上限各环境不一致，直接 limit(500) 可能只回前 100 条）。
+// 按 created_at 倒序翻页，最多 MAX_PAGES 页，避免数据量大时把函数跑超时。
+const PAGE = 100
+const MAX_PAGES = 10
+async function fetchAll(db, where) {
+  const out = []
+  for (let p = 0; p < MAX_PAGES; p++) {
+    let q = db.collection('ai_feedback').where(where || {})
+    try { q = q.order('created_at', 'desc') } catch (e) { /* 无索引时退化为不排序 */ }
+    let r
+    try { r = await q.skip(p * PAGE).limit(PAGE).get() } catch (e) { break }
+    const rows = (r && r.data) || []
+    out.push.apply(out, rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
 function short(s, n) {
   const t = String(s == null ? '' : s)
   return t.length > n ? t.slice(0, n) + '…' : t
@@ -72,10 +90,10 @@ exports.main = async (event) => {
   // 轻量摘要：只数「待处理」有几类/几条，供「我的」页角标显示（不拉全表）
   if (op === 'summary') {
     try {
-      const r = await db.collection('ai_feedback').where({ status: 'pending' }).limit(200).get()
+      const rows = await fetchAll(db, { status: 'pending' })
       const set = {}
-      ;(r.data || []).forEach((x) => { set[[x.signal, x.intent, x.norm].join('|')] = 1 })
-      return { ok: true, pendingGroups: Object.keys(set).length, pendingRows: (r.data || []).length }
+      rows.forEach((x) => { set[[x.signal, x.intent, x.norm].join('|')] = 1 })
+      return { ok: true, pendingGroups: Object.keys(set).length, pendingRows: rows.length }
     } catch (e) {
       return { ok: true, pendingGroups: 0, pendingRows: 0 } // 集合不存在 = 还没有反馈
     }
@@ -84,9 +102,7 @@ exports.main = async (event) => {
   if (op === 'list') {
     let rows = []
     try {
-      // 不用 .order()：当前 wx-server-sdk 报 'where().order is not a function' → 拉全表 + JS sort
-      const r = await db.collection('ai_feedback').where({}).limit(500).get()
-      rows = r.data || []
+      rows = await fetchAll(db, {})
     } catch (e) {
       return { ok: true, isManager: true, groups: [], total: 0 } // 集合不存在时返回空
     }
