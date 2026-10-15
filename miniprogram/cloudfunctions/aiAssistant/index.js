@@ -359,8 +359,104 @@ async function extractStructured(event) {
   }
 }
 
+// —— 理解优先模式（LLM 优先路线 Phase A）：一句话同时判意图 + 抽字段 ——
+// 客户端传：{ mode:'parse', text, rooms:[name...], stages:[name...], today:'YYYY-MM-DD' }
+// 返回：{ ok:true, intent:'material'|'expense'|'diary'|'stage_update'|'none', data:{...} }
+// intent='none' 表示这不是录入/修改指令（是提问或闲聊），客户端应转问答
+function repairParse(data, knownRooms, knownStages) {
+  if (!data || typeof data !== 'object') return null
+  const intent = String(data.intent || '').trim()
+  const d = (data.data && typeof data.data === 'object') ? data.data : {}
+  const inList = (v, list) => !!(v && list && list.indexOf(String(v)) !== -1)
+  if (intent === 'material') {
+    const name = String(d.name || '').trim()
+    if (!name) return null
+    const qty = Number(d.quantity || 0)
+    return { intent, data: { name, brand: String(d.brand || '').trim(), quantity: qty > 0 ? qty : 1, unit: String(d.unit || '个').trim() || '个', unit_price_yuan: Math.max(0, Number(d.unit_price_yuan || 0) || 0), note: String(d.note || '').trim() } }
+  }
+  if (intent === 'expense') {
+    const amount = Number(d.amount_yuan || 0)
+    if (!(amount > 0)) return null
+    const valid = ['labor', 'design', 'deposit', 'other', 'material']
+    let type = String(d.type || 'other').toLowerCase()
+    if (valid.indexOf(type) === -1) type = 'other'
+    return { intent, data: { amount_yuan: amount, type, pay_date: /^\d{4}-\d{1,2}-\d{1,2}$/.test(String(d.pay_date || '')) ? String(d.pay_date) : '', stage_names: (Array.isArray(d.stage_names) ? d.stage_names.map(String) : []).filter((n) => inList(n, knownStages)), remark: String(d.remark || '').trim() } }
+  }
+  if (intent === 'diary') {
+    const content = String(d.content || '').trim()
+    const title = (String(d.title || '').trim() || content.slice(0, 20) || '日记').slice(0, 20)
+    return { intent, data: { title, content, diary_date: /^\d{4}-\d{1,2}-\d{1,2}$/.test(String(d.diary_date || '')) ? String(d.diary_date) : '', room_names: (Array.isArray(d.room_names) ? d.room_names.map(String) : []).filter((n) => inList(n, knownRooms)), stage_names: (Array.isArray(d.stage_names) ? d.stage_names.map(String) : []).filter((n) => inList(n, knownStages)) } }
+  }
+  if (intent === 'stage_update') {
+    const name = String(d.stage_name || '').trim()
+    const status = String(d.status || '').trim()
+    if (!name || ['pending', 'doing', 'done'].indexOf(status) === -1) return null
+    return { intent, data: { stage_name: name, status } }
+  }
+  if (intent === 'none') return { intent: 'none', data: {} }
+  return null
+}
+
+async function parseIntent(event) {
+  const cfg = await getLLMConfig()
+  if (!cfg) return { ok: false, reason: 'not_configured' }
+  const knownRooms = Array.isArray(event.rooms) ? event.rooms : []
+  const knownStages = Array.isArray(event.stages) ? event.stages : []
+  const today = String(event.today || '')
+  const prompt = [
+    '你是装修 App 的指令理解器。判断用户这句话是不是「录入/修改」指令，并抽出字段。',
+    '',
+    '输出一个 JSON：{"intent":"<类别>","data":{...}}',
+    'intent 取值：',
+    '- "material" 录入材料：data = {name, brand, quantity, unit, unit_price_yuan, note}（金额单位是元）',
+    '- "expense" 录入花费：data = {amount_yuan, type, pay_date, stage_names, remark}；type 只能取 labor人工/design设计/deposit订金定金/material材料/other其他',
+    '- "diary" 录入日记：data = {title, content, diary_date, room_names, stage_names}',
+    '- "stage_update" 改装修进度：data = {stage_name, status}；status 只能取 pending未开始/doing进行中/done已完成',
+    '- "none" 不是录入/修改（是在提问、闲聊、查数据）',
+    '',
+    '已知房间名（只能从这里挑，没有就留空数组）：' + (knownRooms.length ? knownRooms.join('、') : '（无）'),
+    '已知阶段名（只能从这里挑，没有就留空数组）：' + (knownStages.length ? knownStages.join('、') : '（无）'),
+    '今天是：' + (today || '未知'),
+    '',
+    '要求：',
+    '- 只输出一个 JSON 对象，不要解释、不要用 markdown 代码块；',
+    '- 金额单位是「元」；日期 YYYY-MM-DD；无法推断的填 0/空串/空数组，不要编造；',
+    '- 判断不了类别就输出 {"intent":"none","data":{}}，不要硬猜。',
+    '',
+    '用户说：' + (event.text || ''),
+  ].join('\n')
+  let j
+  try {
+    j = await httpJson({
+      method: 'POST', url: cfg.base,
+      headers: { Authorization: 'Bearer ' + cfg.key },
+      body: { model: cfg.model, messages: [{ role: 'system', content: '你只输出结构化 JSON，不解释。' }, { role: 'user', content: prompt }], temperature: 0.2, max_tokens: 600, stream: false },
+    })
+  } catch (e) {
+    return { ok: false, reason: 'call_failed', error: String((e && e.message) || e) }
+  }
+  const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content
+  if (!txt) return { ok: false, reason: 'empty_reply' }
+  let raw = String(txt).trim()
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fence) raw = fence[1].trim()
+  const s = raw.indexOf('{'); const e = raw.lastIndexOf('}')
+  if (s !== -1 && e !== -1 && e > s) raw = raw.slice(s, e + 1)
+  try {
+    const parsed = repairParse(JSON.parse(raw), knownRooms, knownStages)
+    if (!parsed) return { ok: false, reason: 'parse_error', error: '意图或字段非法' }
+    return { ok: true, intent: parsed.intent, data: parsed.data }
+  } catch (err) {
+    return { ok: false, reason: 'parse_error', error: String(raw).slice(0, 200) }
+  }
+}
+
 exports.main = async (event) => {
   const { question } = event || {}
+  // —— 理解优先模式：LLM 先判意图+抽字段，规则退为离线兜底 ——
+  if (event && event.mode === 'parse') {
+    return await parseIntent(event)
+  }
   // —— 录入兜底提取模式：自由文本 → 结构化 JSON（启发式解析失败时客户端调用）——
   if (event && event.mode === 'extract') {
     return await extractStructured(event)
