@@ -11,9 +11,29 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 // op='list'（仅管理员）：按「signal|intent|norm」聚合，返回按出现次数倒序的分组
 // op='setStatus'（仅管理员）：整组标记 状态/处理备注
 //   传入 { signal, intent, norm, status, note }；status: pending|fixed|notbug|ignored
-async function isManager(db, openid) {
-  const r = await db.collection('members').where({ user_id: openid }).limit(50).get()
-  return (r.data || []).some((x) => x.role === 'owner' || x.role === 'family')
+//
+// ★ 管理员可见范围 = **项目级隔离**（2026-10-15 收紧）：
+//   只能看「自己担任 owner/family 且 status=active」的那些项目产生的反馈。
+//   反馈里存的是用户原话 + AI 回答，属隐私；不隔离的话 A 项目管理员能看到 B 项目成员说了什么。
+//   返回空数组 = 不是任何项目的管理员（含已退出成员：status 必须为 active）。
+async function managedProjectIds(db, openid) {
+  const r = await db.collection('members')
+    .where({ user_id: openid, status: 'active' })
+    .limit(100)
+    .get()
+  const ids = []
+  ;(r.data || []).forEach((x) => {
+    if ((x.role === 'owner' || x.role === 'family') && x.project_id) ids.push(x.project_id)
+  })
+  return ids
+}
+
+// 反馈行的可见条件：属于我管理的项目。
+// 额外带上 ''（未选项目时记的信号），避免这类反馈永久沉底看不到（其本身不含项目数据）。
+// 注意：必须同步！曾误写成 async，where(一个 Promise) 会让条件静默失效（一行都挡不住）。
+function visibleWhere(db, projectIds) {
+  const _ = db.command
+  return { project_id: _.in(projectIds.concat([''])) }
 }
 
 // 归一化：用于把「说法不同但同类」的问题聚到一起统计出现次数
@@ -83,14 +103,15 @@ exports.main = async (event) => {
     }
   }
 
-  let mgr = false
-  try { mgr = await isManager(db, openid) } catch (e) { mgr = false }
-  if (!mgr) return { ok: false, message: '仅管理员可查看 AI 反馈' }
+  // 项目级门禁：不是任何项目的 active 管理员就到此为止（含已退出成员）
+  let projectIds = []
+  try { projectIds = await managedProjectIds(db, openid) } catch (e) { projectIds = [] }
+  if (!projectIds.length) return { ok: false, message: '仅项目管理员可查看 AI 反馈' }
 
   // 轻量摘要：只数「待处理」有几类/几条，供「我的」页角标显示（不拉全表）
   if (op === 'summary') {
     try {
-      const rows = await fetchAll(db, { status: 'pending' })
+      const rows = await fetchAll(db, Object.assign({ status: 'pending' }, visibleWhere(db, projectIds)))
       const set = {}
       rows.forEach((x) => { set[[x.signal, x.intent, x.norm].join('|')] = 1 })
       return { ok: true, pendingGroups: Object.keys(set).length, pendingRows: rows.length }
@@ -102,7 +123,7 @@ exports.main = async (event) => {
   if (op === 'list') {
     let rows = []
     try {
-      rows = await fetchAll(db, {})
+      rows = await fetchAll(db, visibleWhere(db, projectIds))
     } catch (e) {
       return { ok: true, isManager: true, groups: [], total: 0 } // 集合不存在时返回空
     }
@@ -144,8 +165,9 @@ exports.main = async (event) => {
     const status = ['pending', 'fixed', 'notbug', 'ignored'].indexOf(event && event.status) >= 0 ? event.status : 'pending'
     const note = short((event && event.note) || '', 200)
     try {
+      // 同样只改「我管理的项目」的行：否则整组标记会把别的项目同 key 的反馈一起改掉
       await db.collection('ai_feedback')
-        .where({ signal, intent, norm })
+        .where(Object.assign({ signal, intent, norm }, visibleWhere(db, projectIds)))
         .update({ data: { status, note } })
       return { ok: true }
     } catch (e) {
